@@ -4,19 +4,19 @@ from typing import Dict, Tuple
 
 @dataclass(frozen=True)
 class VehicleConfig:
-    wheel_base: float = 3.2
-    hitch_offset: float = 1.2
-    trailer_length: float = 2.8
-    step_seconds: float = 0.1
-    integrator_substeps: int = 8
-    speed_min: float = -2.0
-    speed_max: float = 2.0
-    articulation_rate_min: float = -0.8
-    articulation_rate_max: float = 0.8
+    wheel_base: float = 3.6
+    hitch_offset: float = 1.8
+    trailer_length: float = 1.8
+    step_seconds: float = 0.2
+    integrator_substeps: int = 80
+    speed_min: float = -2.5
+    speed_max: float = 2.5
+    articulation_rate_min: float = -0.6632251157578452
+    articulation_rate_max: float = 0.6632251157578452
     articulation_limit_rad: float = 0.6283185307179586
-    front_length: float = 3.6
-    rear_length: float = 3.2
-    body_width: float = 2.4
+    front_length: float = 5.0
+    rear_length: float = 4.4
+    body_width: float = 3.43
 
 
 @dataclass(frozen=True)
