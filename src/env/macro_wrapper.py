@@ -2,8 +2,8 @@ from typing import Optional, Protocol, runtime_checkable
 
 import numpy as np
 
-from ..common.types import ArticulatedState, MacroAction, PrimitiveExecutionContext, PrimitiveRollout
-from ..primitives.library import ParameterizedPrimitiveExecutor
+from common.types import ArticulatedState, MacroAction, PrimitiveExecutionContext, PrimitiveRollout
+from primitives.library import ParameterizedPrimitiveExecutor
 
 
 @runtime_checkable

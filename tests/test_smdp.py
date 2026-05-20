@@ -1,6 +1,6 @@
 import numpy as np
 
-from hybridppo_articulated_vehicle.smdp import accumulate_macro_reward, compute_smdp_targets
+from model.smdp import accumulate_macro_reward, compute_smdp_targets
 
 
 def test_accumulate_macro_reward_uses_low_level_discount():

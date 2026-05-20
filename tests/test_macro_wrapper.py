@@ -1,8 +1,8 @@
 import numpy as np
 
-from hybridppo_articulated_vehicle.macro_wrapper import ParameterizedMacroActionWrapper
-from hybridppo_articulated_vehicle.primitives import ParameterizedPrimitiveExecutor, build_default_primitive_library
-from hybridppo_articulated_vehicle.types import ArticulatedState, MacroAction
+from common.types import ArticulatedState, MacroAction
+from env.macro_wrapper import ParameterizedMacroActionWrapper
+from primitives import ParameterizedPrimitiveExecutor, build_default_primitive_library
 
 
 class DummyLowLevelEnv:

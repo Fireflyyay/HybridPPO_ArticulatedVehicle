@@ -3,8 +3,8 @@ from typing import Dict
 
 import numpy as np
 
-from ..common.config import SuccessCriteriaConfig, VehicleConfig
-from ..common.types import ArticulatedState, wrap_to_pi
+from common.config import SuccessCriteriaConfig, VehicleConfig
+from common.types import ArticulatedState, wrap_to_pi
 
 try:
     from shapely.geometry import Polygon

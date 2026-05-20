@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict, Mapping, Optional, Tuple
 
 import numpy as np
 import torch
@@ -7,9 +7,9 @@ import torch.nn.functional as F
 from torch import nn
 from torch.distributions import Categorical
 
-from ...common.config import HybridPPOConfig
-from ...common.types import MacroAction, MacroTransition
-from ...primitives.library import ParameterizedPrimitiveLibrary
+from common.config import HybridPPOConfig
+from common.types import MacroAction, MacroTransition
+from primitives.library import ParameterizedPrimitiveLibrary
 from ..buffer import SMDPBatch, SMDPRolloutBuffer
 from ..distributions import AffineBeta
 from ..networks import HybridPolicyNetwork, ValueNetwork
@@ -162,6 +162,20 @@ class HybridPPOAgent:
         with torch.no_grad():
             value = self.value_net(self._obs_tensor(observation)).squeeze(-1)
         return float(value.item())
+
+    def checkpoint_state(self) -> Dict[str, object]:
+        return {
+            "policy": self.policy.state_dict(),
+            "value_net": self.value_net.state_dict(),
+            "actor_optimizer": self.actor_optimizer.state_dict(),
+            "critic_optimizer": self.critic_optimizer.state_dict(),
+        }
+
+    def load_checkpoint_state(self, checkpoint_state: Mapping[str, object]) -> None:
+        self.policy.load_state_dict(checkpoint_state["policy"])
+        self.value_net.load_state_dict(checkpoint_state["value_net"])
+        self.actor_optimizer.load_state_dict(checkpoint_state["actor_optimizer"])
+        self.critic_optimizer.load_state_dict(checkpoint_state["critic_optimizer"])
 
     def _continuous_dist(self, observations: torch.Tensor, action_ids: torch.Tensor) -> AffineBeta:
         raw = self.policy.continuous_raw(observations, action_ids)

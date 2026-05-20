@@ -2,8 +2,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..common.config import VehicleConfig
-from ..common.types import ArticulatedState, LowLevelControl, wrap_to_pi
+from common.config import VehicleConfig
+from common.types import ArticulatedState, LowLevelControl, wrap_to_pi
 
 
 @dataclass(frozen=True)

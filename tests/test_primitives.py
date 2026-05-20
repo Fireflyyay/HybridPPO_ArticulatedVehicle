@@ -1,5 +1,5 @@
-from hybridppo_articulated_vehicle.primitives import ParameterizedPrimitiveExecutor, build_default_primitive_library
-from hybridppo_articulated_vehicle.types import ArticulatedState, PrimitiveExecutionContext
+from common.types import ArticulatedState, PrimitiveExecutionContext
+from primitives import ParameterizedPrimitiveExecutor, build_default_primitive_library
 
 
 def test_parameterized_primitive_rollout_stays_feasible():

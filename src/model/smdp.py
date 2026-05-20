@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..common.types import SMDPTargets
+from common.types import SMDPTargets
 
 
 def accumulate_macro_reward(step_rewards, gamma: float) -> float:

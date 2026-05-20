@@ -3,7 +3,7 @@ from typing import List
 
 import numpy as np
 
-from ..common.types import MacroTransition
+from common.types import MacroTransition
 
 
 @dataclass(frozen=True)

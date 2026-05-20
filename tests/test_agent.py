@@ -1,9 +1,9 @@
 import numpy as np
 
-from hybridppo_articulated_vehicle.agent import HybridPPOAgent
-from hybridppo_articulated_vehicle.config import HybridPPOConfig
-from hybridppo_articulated_vehicle.primitives import build_default_primitive_library
-from hybridppo_articulated_vehicle.types import MacroTransition
+from common.config import HybridPPOConfig
+from common.types import MacroTransition
+from model.agent import HybridPPOAgent
+from primitives import build_default_primitive_library
 
 
 def test_hybrid_agent_action_and_update_smoke():

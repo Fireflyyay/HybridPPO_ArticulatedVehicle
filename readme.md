@@ -15,30 +15,32 @@
 - 双 actor 头 PPO agent
 - 成功判定与几何评价工具
 - 面向核心逻辑的最小单元测试
+- baseline 风格的 Debug / Warmup / 搅拌站风格场景生成
+- TensorBoard 驱动的最小训练闭环
 
 ## 当前模块
 
-- `src/hybridppo_articulated_vehicle/common/`
+- `src/common/`
 	- 配置、状态类型、SMDP transition 数据结构
-	- 对应原先的 `config.py` 与 `types.py`
 
-- `src/hybridppo_articulated_vehicle/env/`
+- `src/env/`
 	- 中心铰接车运动学积分器
 	- macro action wrapper
 	- 几何成功判定与车体多边形计算
 
-- `src/hybridppo_articulated_vehicle/primitives/`
+- `src/primitives/`
 	- 稳定语义 primitive 定义
 	- 连续参数边界映射
 	- controller-based parameterized primitive executor
 
-- `src/hybridppo_articulated_vehicle/model/`
+- `src/model/`
 	- PPO 网络、分布、buffer、SMDP target 计算
 	- `model/agent/` 下为双 actor 头 Hybrid PPO agent
 
-- `src/hybridppo_articulated_vehicle/*.py`
-	- 保留为兼容导出层
-	- 旧导入路径仍可用，但实际实现已按分层结构组织
+- `src/training/`
+	- rollout driver
+	- checkpoint / evaluation / TensorBoard logger
+	- 训练主循环与 CLI
 
 ## 与 baseline 的关系
 
@@ -73,3 +75,14 @@ pytest
 - dual-head PPO action/update smoke test
 - macro wrapper 的折扣回报累计
 - 成功判定几何检查
+- 任务环境 reset/step smoke test
+- rollout driver smoke test
+- checkpoint round-trip smoke test
+
+## 训练
+
+建议在 `HOPE` conda 环境中运行：
+
+```bash
+PYTHONPATH=src conda run -n HOPE python train.py --episodes 200 --episodes-per-update 8
+```

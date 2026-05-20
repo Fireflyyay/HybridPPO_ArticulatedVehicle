@@ -4,9 +4,9 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-from ..common.config import ParameterBoundsConfig, PrimitiveExecutorConfig, VehicleConfig
-from ..common.types import ArticulatedState, LowLevelControl, PrimitiveExecutionContext, PrimitiveRollout, wrap_to_pi
-from ..env.dynamics import ArticulatedKinematics
+from common.config import ParameterBoundsConfig, PrimitiveExecutorConfig, VehicleConfig
+from common.types import ArticulatedState, LowLevelControl, PrimitiveExecutionContext, PrimitiveRollout, wrap_to_pi
+from env.dynamics import ArticulatedKinematics
 
 
 class SemanticPrimitive(str, Enum):

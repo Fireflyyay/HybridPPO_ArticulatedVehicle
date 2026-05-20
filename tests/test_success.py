@@ -1,6 +1,6 @@
-from hybridppo_articulated_vehicle.config import VehicleConfig
-from hybridppo_articulated_vehicle.success import ParkingSuccessChecker
-from hybridppo_articulated_vehicle.types import ArticulatedState
+from common.config import VehicleConfig
+from common.types import ArticulatedState
+from env.success import ParkingSuccessChecker
 
 
 def test_success_checker_matches_identical_pose():
