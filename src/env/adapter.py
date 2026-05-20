@@ -77,7 +77,7 @@ def create_env_adapter(
     observation_config: ObservationConfig,
     reward_config: RewardConfig,
 ) -> KinematicTaskAdapter:
-    scene_factory = BaselineInspiredSceneFactory(env_config.scene_presets)
+    scene_factory = BaselineInspiredSceneFactory(env_config.scene_presets, vehicle_config=vehicle_config)
     task_env = KinematicTaskEnv(
         scene_factory=scene_factory,
         vehicle_config=vehicle_config,

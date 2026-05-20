@@ -8,7 +8,7 @@ from .config import HybridPPOConfig, PrimitiveExecutorConfig, VehicleConfig
 
 @dataclass(frozen=True)
 class ObservationConfig:
-    lidar_num_beams: int = 24
+    lidar_num_beams: int = 108
     lidar_max_range: float = 30.0
     goal_distance_scale: float = 70.0
 
@@ -38,6 +38,7 @@ class SceneLevelConfig:
     block_size: float = 1.0
     boundary_margin: float = 8.0
     pair_distance_range: Tuple[float, float] = (12.0, 48.0)
+    pair_heading_diff_range_deg: Tuple[float, float] = (0.0, 180.0)
     heading_jitter_rad: float = float(np.deg2rad(15.0))
     corridor_width_range: Tuple[int, int] = (6, 8)
     main_corridor_count: int = 1
@@ -47,6 +48,7 @@ class SceneLevelConfig:
     parking_bay_count_range: Tuple[int, int] = (1, 1)
     parking_bay_length_range: Tuple[int, int] = (6, 8)
     parking_bay_depth_range: Tuple[int, int] = (8, 12)
+    parking_head_wall_clearance: float = 1.0
 
 
 def build_scene_presets() -> Dict[str, SceneLevelConfig]:
@@ -60,15 +62,18 @@ def build_scene_presets() -> Dict[str, SceneLevelConfig]:
         "Warmup": SceneLevelConfig(
             boundary_margin=2.0,
             pair_distance_range=(6.0, 30.0),
+            pair_heading_diff_range_deg=(0.0, 120.0),
             corridor_width_range=(6, 6),
             branch_count_range=(0, 0),
             parking_bay_count_range=(1, 1),
             parking_bay_length_range=(6, 8),
             parking_bay_depth_range=(12, 14),
+            parking_head_wall_clearance=1.0,
         ),
         "Normal": SceneLevelConfig(
             boundary_margin=2.0,
             pair_distance_range=(10.0, 60.0),
+            pair_heading_diff_range_deg=(0.0, 180.0),
             corridor_width_range=(8, 8),
             main_corridor_count=3,
             branch_count_range=(3, 5),
@@ -77,6 +82,7 @@ def build_scene_presets() -> Dict[str, SceneLevelConfig]:
             parking_bay_count_range=(2, 3),
             parking_bay_length_range=(7, 8),
             parking_bay_depth_range=(8, 8),
+            parking_head_wall_clearance=1.0,
         ),
     }
 
@@ -84,7 +90,7 @@ def build_scene_presets() -> Dict[str, SceneLevelConfig]:
 @dataclass(frozen=True)
 class EnvRuntimeConfig:
     default_level: str = "Normal"
-    max_low_level_steps_per_episode: int = 240
+    max_low_level_steps_per_episode: int = 500
     scene_presets: Mapping[str, SceneLevelConfig] = field(default_factory=build_scene_presets)
 
 
@@ -94,14 +100,14 @@ class HybridPPOHyperConfig:
     action_embedding_dim: int = 32
     actor_lr: float = 3e-4
     critic_lr: float = 1e-3
-    gamma: float = 0.99
+    gamma: float = 0.98
     gae_lambda: float = 0.95
     clip_epsilon: float = 0.2
     value_coef: float = 0.5
     entropy_coef_discrete: float = 0.01
     entropy_coef_continuous: float = 0.001
     max_grad_norm: float = 0.5
-    mini_batch_size: int = 64
+    mini_batch_size: int = 1024
     update_epochs: int = 10
     std_floor: float = 0.05
 
@@ -129,12 +135,12 @@ class HybridPPOHyperConfig:
 
 @dataclass(frozen=True)
 class TrainingScheduleConfig:
-    total_episodes: int = 2000
-    episodes_per_update: int = 8
+    total_episodes: int = 10000
+    episodes_per_update: int = 512
     max_macro_steps_per_episode: int = 64
-    debug_phase_episodes: int = 100
+    debug_phase_episodes: int = 1000
     warmup_level: str = "Warmup"
-    warmup_episodes: int = 400
+    warmup_episodes: int = 2000
     default_train_level: str = "Normal"
     debug_level: str = "Debug"
 

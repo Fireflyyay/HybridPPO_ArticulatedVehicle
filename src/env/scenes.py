@@ -1,13 +1,15 @@
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Mapping, Sequence, Tuple, Union
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from shapely.affinity import rotate, translate
 from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
 
+from common.config import VehicleConfig
 from common.runtime_config import SceneLevelConfig
-from common.types import ArticulatedState
+from common.types import ArticulatedState, wrap_to_pi
+from env.success import articulated_body_polygons
 
 
 @dataclass(frozen=True)
@@ -68,8 +70,41 @@ def _sample_distance(rng: np.random.Generator, low_high: Tuple[float, float]) ->
 
 
 class BaselineInspiredSceneFactory:
-    def __init__(self, presets: Union[Mapping[str, SceneLevelConfig], Sequence[Tuple[str, SceneLevelConfig]]]) -> None:
+    def __init__(
+        self,
+        presets: Union[Mapping[str, SceneLevelConfig], Sequence[Tuple[str, SceneLevelConfig]]],
+        vehicle_config: Optional[VehicleConfig] = None,
+    ) -> None:
         self.presets = dict(presets)
+        self.vehicle_config = vehicle_config or VehicleConfig()
+
+    def _front_reach(self) -> float:
+        return max(0.0, float(self.vehicle_config.front_length) - float(self.vehicle_config.hitch_offset))
+
+    def _rear_reach(self) -> float:
+        return max(0.0, float(self.vehicle_config.hitch_offset) + float(self.vehicle_config.rear_length))
+
+    def _candidate_state(self, candidate: _PoseCandidate) -> ArticulatedState:
+        return ArticulatedState(candidate.x, candidate.y, candidate.heading, candidate.heading)
+
+    def _filter_valid_candidates(
+        self,
+        candidates: Iterable[_PoseCandidate],
+        obstacles: Sequence[Polygon],
+        world_bounds: Tuple[float, float, float, float],
+    ) -> Tuple[_PoseCandidate, ...]:
+        xmin, xmax, ymin, ymax = world_bounds
+        world_box = box(float(xmin), float(ymin), float(xmax), float(ymax))
+        obstacle_union = None if len(obstacles) == 0 else unary_union(list(obstacles))
+        valid: List[_PoseCandidate] = []
+        for candidate in candidates:
+            front_poly, rear_poly = articulated_body_polygons(self._candidate_state(candidate), self.vehicle_config)
+            if not bool(world_box.covers(front_poly) and world_box.covers(rear_poly)):
+                continue
+            if obstacle_union is not None and bool(front_poly.intersects(obstacle_union) or rear_poly.intersects(obstacle_union)):
+                continue
+            valid.append(candidate)
+        return tuple(valid)
 
     def generate(self, level: str, rng: np.random.Generator) -> SceneSpec:
         level_name = str(level)
@@ -115,102 +150,142 @@ class BaselineInspiredSceneFactory:
         free_space = unary_union([corridor, bay]).buffer(0)
         world = box(config.world_min, config.world_min, config.world_max, config.world_max)
         obstacles = tuple(_extract_polygons(world.difference(free_space).buffer(0)))
-
-        start_state = ArticulatedState(x=-24.0, y=0.0, front_heading=0.0, rear_heading=0.0)
-        goal_state = ArticulatedState(x=14.0, y=9.0, front_heading=float(np.pi / 2.0), rear_heading=float(np.pi / 2.0))
-
-        rotation_deg = float(rng.choice([0.0, 90.0, 180.0, 270.0]))
-        dx = float(rng.uniform(-4.0, 4.0))
-        dy = float(rng.uniform(-4.0, 4.0))
-        transformed_obstacles = tuple(_transform_polygon(poly, rotation_deg, dx, dy) for poly in obstacles)
-        transformed_start = _transform_state(start_state, rotation_deg, dx, dy)
-        transformed_goal = _transform_state(goal_state, rotation_deg, dx, dy)
-
-        return SceneSpec(
-            level=level,
-            world_bounds=(float(config.world_min), float(config.world_max), float(config.world_min), float(config.world_max)),
-            obstacles=transformed_obstacles,
-            start_state=transformed_start,
-            goal_state=transformed_goal,
-            metadata={"scene_type": "warmup_bay"},
+        head_clearance = float(config.parking_head_wall_clearance)
+        start_state = ArticulatedState(x=-12.0, y=0.0, front_heading=0.0, rear_heading=0.0)
+        goal_state = ArticulatedState(
+            x=14.0,
+            y=15.0 - head_clearance - self._front_reach(),
+            front_heading=float(np.pi / 2.0),
+            rear_heading=float(np.pi / 2.0),
         )
+        world_bounds = (float(config.world_min), float(config.world_max), float(config.world_min), float(config.world_max))
+
+        for _ in range(64):
+            rotation_deg = float(rng.choice([0.0, 90.0, 180.0, 270.0]))
+            dx = float(rng.uniform(-4.0, 4.0))
+            dy = float(rng.uniform(-4.0, 4.0))
+            transformed_obstacles = tuple(_transform_polygon(poly, rotation_deg, dx, dy) for poly in obstacles)
+            transformed_start = _transform_state(start_state, rotation_deg, dx, dy)
+            transformed_goal = _transform_state(goal_state, rotation_deg, dx, dy)
+            valid = self._filter_valid_candidates(
+                [
+                    _PoseCandidate(transformed_start.x, transformed_start.y, transformed_start.front_heading),
+                    _PoseCandidate(transformed_goal.x, transformed_goal.y, transformed_goal.front_heading),
+                ],
+                transformed_obstacles,
+                world_bounds,
+            )
+            if len(valid) != 2:
+                continue
+            return SceneSpec(
+                level=level,
+                world_bounds=world_bounds,
+                obstacles=transformed_obstacles,
+                start_state=transformed_start,
+                goal_state=transformed_goal,
+                metadata={"scene_type": "warmup_bay", "aligned_to": "ppo_articulated_vehicle"},
+            )
+        raise RuntimeError("failed to sample warmup scene")
 
     def _generate_block_mixing(self, level: str, config: SceneLevelConfig, rng: np.random.Generator) -> SceneSpec:
-        world = box(config.world_min, config.world_min, config.world_max, config.world_max)
         world_min = float(config.world_min)
         world_max = float(config.world_max)
         margin = float(config.boundary_margin)
-        corridor_width = float(rng.integers(config.corridor_width_range[0], config.corridor_width_range[1] + 1))
+        rear_clearance = self._rear_reach() + 0.25
+        front_clearance = self._front_reach() + float(config.parking_head_wall_clearance)
+        world_bounds = (world_min, world_max, world_min, world_max)
 
-        center_x = float(rng.uniform(world_min * 0.2, world_max * 0.2))
-        free_shapes: List[Polygon] = []
-        candidates: List[_PoseCandidate] = []
+        for _ in range(128):
+            world = box(world_min, world_min, world_max, world_max)
+            corridor_width = float(rng.integers(config.corridor_width_range[0], config.corridor_width_range[1] + 1))
+            center_x = float(rng.uniform(world_min * 0.2, world_max * 0.2))
+            free_shapes: List[Polygon] = []
+            candidates: List[_PoseCandidate] = []
 
-        main_corridor = box(center_x - corridor_width * 0.5, world_min + margin, center_x + corridor_width * 0.5, world_max - margin)
-        free_shapes.append(main_corridor)
-        candidates.extend(
-            [
-                _PoseCandidate(center_x, world_min + margin + 4.0, float(np.pi / 2.0)),
-                _PoseCandidate(center_x, world_max - margin - 4.0, float(-np.pi / 2.0)),
-            ]
-        )
+            main_corridor = box(center_x - corridor_width * 0.5, world_min + margin, center_x + corridor_width * 0.5, world_max - margin)
+            free_shapes.append(main_corridor)
+            candidates.extend(
+                [
+                    _PoseCandidate(center_x, world_min + margin + rear_clearance, float(np.pi / 2.0)),
+                    _PoseCandidate(center_x, world_max - margin - rear_clearance, float(-np.pi / 2.0)),
+                ]
+            )
 
-        branch_count = int(rng.integers(config.branch_count_range[0], config.branch_count_range[1] + 1))
-        bay_count = int(rng.integers(config.parking_bay_count_range[0], config.parking_bay_count_range[1] + 1))
-        branch_ys = rng.uniform(world_min + margin + 8.0, world_max - margin - 8.0, size=max(1, branch_count))
+            branch_count = int(rng.integers(config.branch_count_range[0], config.branch_count_range[1] + 1))
+            bay_count = int(rng.integers(config.parking_bay_count_range[0], config.parking_bay_count_range[1] + 1))
+            branch_ys = rng.uniform(world_min + margin + 8.0, world_max - margin - 8.0, size=max(1, branch_count))
 
-        for branch_y in branch_ys[:branch_count]:
-            direction = int(rng.choice([-1, 1]))
-            length = float(_sample_distance(rng, config.segment_length_range))
-            end_x = float(np.clip(center_x + direction * length, world_min + margin + 4.0, world_max - margin - 4.0))
-            branch = box(min(center_x, end_x), branch_y - corridor_width * 0.5, max(center_x, end_x), branch_y + corridor_width * 0.5)
-            free_shapes.append(branch)
-            heading = 0.0 if direction > 0 else float(np.pi)
-            candidates.append(_PoseCandidate(end_x, branch_y, heading))
+            for branch_y in branch_ys[:branch_count]:
+                direction = int(rng.choice([-1, 1]))
+                length = float(_sample_distance(rng, config.segment_length_range))
+                end_x = float(np.clip(center_x + direction * length, world_min + margin + 4.0, world_max - margin - 4.0))
+                branch = box(min(center_x, end_x), branch_y - corridor_width * 0.5, max(center_x, end_x), branch_y + corridor_width * 0.5)
+                free_shapes.append(branch)
+                heading = 0.0 if direction > 0 else float(np.pi)
+                candidates.append(_PoseCandidate(end_x - direction * front_clearance, branch_y, heading))
 
-            if bay_count > 0:
-                bay_count -= 1
-                bay_length = float(_sample_distance(rng, config.parking_bay_length_range))
-                bay_depth = float(_sample_distance(rng, config.parking_bay_depth_range))
-                bay_dir = int(rng.choice([-1, 1]))
-                bay = box(
-                    end_x - bay_length * 0.5,
-                    branch_y,
-                    end_x + bay_length * 0.5,
-                    branch_y + bay_dir * bay_depth,
-                ) if bay_dir > 0 else box(
-                    end_x - bay_length * 0.5,
-                    branch_y + bay_dir * bay_depth,
-                    end_x + bay_length * 0.5,
-                    branch_y,
+                if bay_count > 0:
+                    bay_count -= 1
+                    bay_length = float(_sample_distance(rng, config.parking_bay_length_range))
+                    bay_depth = float(_sample_distance(rng, config.parking_bay_depth_range))
+                    bay_dir = int(rng.choice([-1, 1]))
+                    bay = box(
+                        end_x - bay_length * 0.5,
+                        branch_y,
+                        end_x + bay_length * 0.5,
+                        branch_y + bay_dir * bay_depth,
+                    ) if bay_dir > 0 else box(
+                        end_x - bay_length * 0.5,
+                        branch_y + bay_dir * bay_depth,
+                        end_x + bay_length * 0.5,
+                        branch_y,
+                    )
+                    free_shapes.append(bay)
+                    bay_heading = float(np.pi / 2.0) if bay_dir > 0 else float(-np.pi / 2.0)
+                    bay_goal_y = branch_y + bay_dir * max(front_clearance, bay_depth - front_clearance)
+                    candidates.append(_PoseCandidate(end_x, bay_goal_y, bay_heading))
+
+            free_space = unary_union(free_shapes).buffer(0)
+            obstacles = tuple(_extract_polygons(world.difference(free_space).buffer(0)))
+            valid_candidates = self._filter_valid_candidates(candidates, obstacles, world_bounds)
+            if len(valid_candidates) < 2:
+                continue
+            try:
+                start, goal = self._sample_pose_pair(
+                    rng,
+                    valid_candidates,
+                    config.pair_distance_range,
+                    config.pair_heading_diff_range_deg,
                 )
-                free_shapes.append(bay)
-                bay_heading = float(np.pi / 2.0) if bay_dir > 0 else float(-np.pi / 2.0)
-                candidates.append(_PoseCandidate(end_x, branch_y + bay_dir * max(2.0, 0.5 * bay_depth), bay_heading))
-
-        free_space = unary_union(free_shapes).buffer(0)
-        obstacles = tuple(_extract_polygons(world.difference(free_space).buffer(0)))
-
-        start, goal = self._sample_pose_pair(rng, candidates, config.pair_distance_range)
-        return SceneSpec(
-            level=level,
-            world_bounds=(world_min, world_max, world_min, world_max),
-            obstacles=obstacles,
-            start_state=ArticulatedState(start.x, start.y, start.heading, start.heading),
-            goal_state=ArticulatedState(goal.x, goal.y, goal.heading, goal.heading),
-            metadata={"scene_type": "block_mixing_plant", "free_shape_count": len(free_shapes)},
-        )
+            except RuntimeError:
+                continue
+            return SceneSpec(
+                level=level,
+                world_bounds=world_bounds,
+                obstacles=obstacles,
+                start_state=ArticulatedState(start.x, start.y, start.heading, start.heading),
+                goal_state=ArticulatedState(goal.x, goal.y, goal.heading, goal.heading),
+                metadata={
+                    "scene_type": "block_mixing_plant",
+                    "free_shape_count": len(free_shapes),
+                    "valid_candidate_count": len(valid_candidates),
+                    "aligned_to": "ppo_articulated_vehicle",
+                },
+            )
+        raise RuntimeError("failed to sample block mixing scene")
 
     def _sample_pose_pair(
         self,
         rng: np.random.Generator,
         candidates: Iterable[_PoseCandidate],
         pair_distance_range: Tuple[float, float],
+        pair_heading_diff_range_deg: Tuple[float, float] = (0.0, 180.0),
     ) -> Tuple[_PoseCandidate, _PoseCandidate]:
         candidate_list = list(candidates)
         if len(candidate_list) < 2:
             raise RuntimeError("insufficient pose candidates")
         low, high = float(pair_distance_range[0]), float(pair_distance_range[1])
+        min_heading_deg, max_heading_deg = float(pair_heading_diff_range_deg[0]), float(pair_heading_diff_range_deg[1])
         for _ in range(256):
             start = candidate_list[int(rng.integers(0, len(candidate_list)))]
             goal = candidate_list[int(rng.integers(0, len(candidate_list)))]
@@ -218,6 +293,9 @@ class BaselineInspiredSceneFactory:
                 continue
             dist = float(np.hypot(goal.x - start.x, goal.y - start.y))
             if dist < low or dist > high:
+                continue
+            heading_diff_deg = abs(float(np.rad2deg(wrap_to_pi(goal.heading - start.heading))))
+            if heading_diff_deg < min_heading_deg or heading_diff_deg > max_heading_deg:
                 continue
             return start, goal
         start = candidate_list[0]

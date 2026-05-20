@@ -25,3 +25,31 @@ def test_task_env_reset_and_step_produce_expected_fields():
     assert "collision" in step_info
     assert "goal_reached" in step_info
     assert "reward_info" in step_info
+
+
+def test_task_env_default_observation_uses_108_beams():
+    env = create_env_adapter(
+        env_config=EnvRuntimeConfig(max_low_level_steps_per_episode=20),
+        vehicle_config=VehicleConfig(),
+        observation_config=ObservationConfig(),
+        reward_config=RewardConfig(),
+    )
+
+    observation, _ = env.reset(seed=7, options={"level": "Debug"})
+    assert observation.shape == (117,)
+    assert env.observation_dim == 117
+
+
+def test_scene_resets_are_collision_free_for_training_levels():
+    env = create_env_adapter(
+        env_config=EnvRuntimeConfig(max_low_level_steps_per_episode=20),
+        vehicle_config=VehicleConfig(),
+        observation_config=ObservationConfig(lidar_num_beams=8),
+        reward_config=RewardConfig(),
+    )
+
+    for level in ("Debug", "Warmup", "Normal"):
+        for seed in range(25):
+            env.reset(seed=seed, options={"level": level})
+            assert not env.env.predict_collision(env.get_articulated_state())
+            assert not env.env.predict_collision(env.get_goal_state())
