@@ -12,6 +12,7 @@ dependencies = [
     "numpy>=1.21",
     "torch>=2.0",
     "shapely>=1.8",
+    "matplotlib>=3.5",
     "tensorboard>=2.14",
 ]
 
