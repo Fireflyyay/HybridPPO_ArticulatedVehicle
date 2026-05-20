@@ -18,6 +18,14 @@ class AffineBeta:
     def mean(self) -> torch.Tensor:
         return self.low + self.scale * self.base.mean
 
+    @property
+    def variance(self) -> torch.Tensor:
+        return (self.scale ** 2) * self.base.variance
+
+    @property
+    def stddev(self) -> torch.Tensor:
+        return torch.sqrt(torch.clamp(self.variance, min=self.eps))
+
     def sample(self) -> torch.Tensor:
         return self.low + self.scale * self.base.sample()
 

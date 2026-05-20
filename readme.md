@@ -104,6 +104,49 @@ pytest
 PYTHONPATH=src conda run -n HOPE python train.py --episodes 200 --episodes-per-update 8
 ```
 
+## 生成 Proxy Safety Sidecar
+
+如果你要启用 soft mask，第一步不是直接改训练脚本，而是先离线生成 proxy safety sidecar。sidecar 会为当前 semantic primitive 库预计算：
+
+- articulation angle bins
+- 每个 semantic action 对应的 proxy parameter grid
+- 基于前后车体 swept volume 的 ray required-clearance
+
+仓库已经提供了离线生成脚本 [example/build_proxy_safety_sidecar.py](example/build_proxy_safety_sidecar.py)。最小用法如下：
+
+```bash
+PYTHONPATH=src conda run -n HOPE python example/build_proxy_safety_sidecar.py \
+	--output data/proxy_safety_sidecar.npz
+```
+
+一个更接近实际训练配置的例子：
+
+```bash
+PYTHONPATH=src conda run -n HOPE python example/build_proxy_safety_sidecar.py \
+	--output data/proxy_safety_sidecar.npz \
+	--lidar-beams 108 \
+	--lidar-range 30 \
+	--articulation-bins 7 \
+	--proxy-resolution 2 \
+	--max-macro-steps 32
+```
+
+常用参数：
+
+- `--output`：sidecar 输出路径，训练时会通过这个路径加载
+- `--lidar-beams`：必须和训练时观测里的 lidar beam 数一致
+- `--lidar-range`：必须和训练时观测里的 lidar 最大距离一致
+- `--articulation-bins`：离线索引使用的 articulation 离散 bin 数
+- `--proxy-resolution`：每个语义动作内部代理参数网格的离散分辨率
+- `--max-proxies-per-action`：如果不为空，会对每个语义动作保留固定数量的代理点，降低 sidecar 体积
+- `--max-macro-steps`：离线构建时每个 proxy rollout 的最大 macro horizon
+
+要点：
+
+- sidecar 必须和当前 primitive library、车辆参数、lidar 配置保持一致，否则加载后虽然能运行，但安全分数会失真。
+- 如果你修改了 [src/common/config.py](src/common/config.py) 里的 `VehicleConfig`、`PrimitiveExecutorConfig` 或 primitive 参数边界，应该重新生成 sidecar。
+- sidecar 只作为安全代理索引使用，不会扩展真实动作空间，也不会改写真实 SMDP transition。
+
 常用参数：
 
 - `--episodes`：总训练回合数
@@ -121,6 +164,12 @@ PYTHONPATH=src conda run -n HOPE python train.py --episodes 200 --episodes-per-u
 - `--run-name`：运行名称
 - `--save-interval`：checkpoint 保存间隔
 - `--lidar-beams`：观测里激光束数量
+- `--proxy-safety-sidecar`：离线 sidecar 文件路径
+- `--enable-soft-mask`：开启语义 soft mask
+- `--soft-mask-gamma`：控制 soft mask 对低安全分数的压制强度
+- `--soft-mask-logit-scale`：控制 semantic score 映射到 logits bias 的强度，越小越宽松
+- `--soft-mask-floor`：soft mask 的概率下限，越大越不容易把动作压得过低
+- `--safety-loss-coef`：连续参数 auxiliary safety loss 的权重
 - `--resume`：从已有 checkpoint 恢复
 
 训练输出默认包括：
@@ -129,6 +178,53 @@ PYTHONPATH=src conda run -n HOPE python train.py --episodes 200 --episodes-per-u
 - latest checkpoint
 - periodic checkpoint
 - best checkpoint
+
+## 开启 Soft Mask
+
+生成 sidecar 之后，可以在训练命令里显式开启 soft mask：
+
+```bash
+PYTHONPATH=src conda run -n HOPE python train.py \
+	--episodes 200 \
+	--episodes-per-update 8 \
+	--lidar-beams 108 \
+	--proxy-safety-sidecar data/proxy_safety_sidecar.npz \
+	--enable-soft-mask \
+	--soft-mask-gamma 1.0 \
+	--soft-mask-logit-scale 1.0 \
+	--soft-mask-floor 0.2 \
+	--safety-loss-coef 0.05
+```
+
+当前版本的开启条件很简单：
+
+- `--proxy-safety-sidecar` 指向一个有效的 sidecar 文件
+- `--enable-soft-mask` 打开 agent 的 soft mask 分支
+
+其中：
+
+- `--enable-soft-mask` 会把 [src/common/runtime_config.py](src/common/runtime_config.py) 里的 `ExperimentConfig.agent.soft_mask_enabled` 设为 `True`
+- `--proxy-safety-sidecar` 会写入 [src/common/runtime_config.py](src/common/runtime_config.py) 里的 `ExperimentConfig.proxy_safety.sidecar_path`
+- `--soft-mask-gamma`、`--soft-mask-logit-scale`、`--soft-mask-floor` 和 `--safety-loss-coef` 会覆盖 agent 超参数
+
+如果你不想走 CLI，也可以直接在 [src/common/runtime_config.py](src/common/runtime_config.py) 修改默认值：
+
+- 把 `HybridPPOHyperConfig.soft_mask_enabled` 改成 `True`
+- 在 `ProxySafetyConfig.sidecar_path` 里填 sidecar 路径
+
+当前 soft mask 的作用范围是：
+
+- 它会在高层离散语义动作采样前，对 semantic logits 加一个分布感知的 soft bias
+- 它会额外引入连续参数的 auxiliary safety loss
+- 它不会把 proxy primitive 当作真实动作执行，也不会篡改真实执行得到的 tau、reward、next state 或 value target
+
+当前默认值已经刻意设得偏宽松，适合先在相对狭窄的场景里避免一次性压掉大量动作：
+
+- `soft_mask_gamma = 1.0`
+- `soft_mask_logit_scale = 1.0`
+- `soft_mask_floor = 0.2`
+
+如果你发现 early training 里语义动作还是收缩得太快，优先继续减小 `--soft-mask-logit-scale`，或者增大 `--soft-mask-floor`，而不是先把 mask 直接关掉。
 
 ## 运行逻辑
 

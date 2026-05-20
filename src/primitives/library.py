@@ -7,6 +7,7 @@ import numpy as np
 from common.config import ParameterBoundsConfig, PrimitiveExecutorConfig, VehicleConfig
 from common.types import ArticulatedState, LowLevelControl, PrimitiveExecutionContext, PrimitiveRollout, wrap_to_pi
 from env.dynamics import ArticulatedKinematics
+from .proxy_safety import ProxySafetySidecar, primitive_library_signature
 
 
 class SemanticPrimitive(str, Enum):
@@ -43,7 +44,7 @@ def _default_specs() -> Tuple[PrimitiveSpec, ...]:
 
 
 class ParameterizedPrimitiveLibrary:
-    def __init__(self, specs: Optional[Sequence[PrimitiveSpec]] = None, parameter_bounds: Optional[Mapping[str, Tuple[float, float]]] = None) -> None:
+    def __init__(self, specs: Optional[Sequence[PrimitiveSpec]] = None, parameter_bounds: Optional[Mapping[str, Tuple[float, float]]] = None, proxy_sidecar: Optional[ProxySafetySidecar] = None) -> None:
         self.specs: Tuple[PrimitiveSpec, ...] = tuple(specs or _default_specs())
         self.specs_by_id = {int(spec.primitive_id): spec for spec in self.specs}
         if len(self.specs_by_id) != len(self.specs):
@@ -53,6 +54,10 @@ class ParameterizedPrimitiveLibrary:
         self.bounds: Dict[str, Tuple[float, float]] = {str(name): tuple((parameter_bounds or bounds_cfg.bounds)[name]) for name in self.parameter_names}
         self.low = np.asarray([self.bounds[name][0] for name in self.parameter_names], dtype=np.float32)
         self.high = np.asarray([self.bounds[name][1] for name in self.parameter_names], dtype=np.float32)
+        self.signature = primitive_library_signature(self._spec_signature_payload(), self.parameter_names, self.bounds)
+        self.proxy_sidecar: Optional[ProxySafetySidecar] = None
+        if proxy_sidecar is not None:
+            self.attach_proxy_sidecar(proxy_sidecar)
 
     @property
     def action_dim(self) -> int:
@@ -96,6 +101,26 @@ class ParameterizedPrimitiveLibrary:
     def dict_to_vector(self, values: Mapping[str, float]) -> np.ndarray:
         out = np.asarray([values.get(name, 0.5 * (self.bounds[name][0] + self.bounds[name][1])) for name in self.parameter_names], dtype=np.float32)
         return self.clip(out)
+
+    def attach_proxy_sidecar(self, proxy_sidecar: Optional[ProxySafetySidecar]) -> None:
+        if proxy_sidecar is None:
+            self.proxy_sidecar = None
+            return
+        if not proxy_sidecar.compatible_with(action_dim=self.action_dim, parameter_dim=self.parameter_dim, expected_signature=self.signature):
+            raise ValueError("proxy safety sidecar is incompatible with this primitive library")
+        self.proxy_sidecar = proxy_sidecar
+
+    def _spec_signature_payload(self) -> Tuple[Dict[str, object], ...]:
+        return tuple(
+            {
+                "primitive_id": int(spec.primitive_id),
+                "semantic": str(spec.semantic),
+                "active_parameters": tuple(map(str, spec.active_parameters)),
+                "direction_sign": int(spec.direction_sign),
+                "turn_sign": int(spec.turn_sign),
+            }
+            for spec in self.specs
+        )
 
 
 class ParameterizedPrimitiveExecutor:
@@ -251,5 +276,5 @@ class ParameterizedPrimitiveExecutor:
         return float(best_speed)
 
 
-def build_default_primitive_library() -> ParameterizedPrimitiveLibrary:
-    return ParameterizedPrimitiveLibrary(specs=_default_specs())
+def build_default_primitive_library(proxy_sidecar: Optional[ProxySafetySidecar] = None) -> ParameterizedPrimitiveLibrary:
+    return ParameterizedPrimitiveLibrary(specs=_default_specs(), proxy_sidecar=proxy_sidecar)

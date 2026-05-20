@@ -6,7 +6,7 @@ from common.runtime_config import ExperimentConfig
 from env.adapter import create_env_adapter
 from env.macro_wrapper import ParameterizedMacroActionWrapper
 from model.agent import HybridPPOAgent
-from primitives import ParameterizedPrimitiveExecutor, build_default_primitive_library
+from primitives import ParameterizedPrimitiveExecutor, build_default_primitive_library, load_proxy_safety_sidecar
 from training.checkpoint import CheckpointManager
 from training.evaluator import PolicyEvaluator
 from training.logger import TensorBoardLogger
@@ -33,7 +33,11 @@ class ExperimentTrainer:
         self.config = config
         self.device = _resolve_device(config.device)
         self.logger = TensorBoardLogger(config.logging)
-        self.primitive_library = build_default_primitive_library()
+        proxy_sidecar = None
+        proxy_sidecar_path = str(config.proxy_safety.sidecar_path).strip()
+        if proxy_sidecar_path:
+            proxy_sidecar = load_proxy_safety_sidecar(proxy_sidecar_path)
+        self.primitive_library = build_default_primitive_library(proxy_sidecar=proxy_sidecar)
         self.agent = HybridPPOAgent(
             config=config.agent.build(
                 observation_dim=int(config.observation.observation_dim),

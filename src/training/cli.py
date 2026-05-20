@@ -23,6 +23,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-name", type=str, default=None)
     parser.add_argument("--save-interval", type=int, default=None)
     parser.add_argument("--lidar-beams", type=int, default=None)
+    parser.add_argument("--proxy-safety-sidecar", type=str, default=None)
+    parser.add_argument("--enable-soft-mask", action="store_true")
+    parser.add_argument("--soft-mask-gamma", type=float, default=None)
+    parser.add_argument("--soft-mask-logit-scale", type=float, default=None)
+    parser.add_argument("--soft-mask-floor", type=float, default=None)
+    parser.add_argument("--safety-loss-coef", type=float, default=None)
     parser.add_argument("--resume", type=str, default=None)
     return parser
 
@@ -32,6 +38,26 @@ def build_experiment_config(args: argparse.Namespace) -> ExperimentConfig:
     observation = replace(
         config.observation,
         lidar_num_beams=int(args.lidar_beams) if args.lidar_beams is not None else config.observation.lidar_num_beams,
+    )
+    agent = replace(
+        config.agent,
+        soft_mask_enabled=bool(args.enable_soft_mask) or config.agent.soft_mask_enabled,
+        soft_mask_gamma=float(args.soft_mask_gamma) if args.soft_mask_gamma is not None else config.agent.soft_mask_gamma,
+        soft_mask_logit_scale=(
+            float(args.soft_mask_logit_scale)
+            if args.soft_mask_logit_scale is not None
+            else config.agent.soft_mask_logit_scale
+        ),
+        soft_mask_floor=(
+            float(args.soft_mask_floor)
+            if args.soft_mask_floor is not None
+            else config.agent.soft_mask_floor
+        ),
+        safety_loss_coef=float(args.safety_loss_coef) if args.safety_loss_coef is not None else config.agent.safety_loss_coef,
+    )
+    proxy_safety = replace(
+        config.proxy_safety,
+        sidecar_path=str(args.proxy_safety_sidecar) if args.proxy_safety_sidecar is not None else config.proxy_safety.sidecar_path,
     )
     env = replace(
         config.env,
@@ -93,6 +119,8 @@ def build_experiment_config(args: argparse.Namespace) -> ExperimentConfig:
         seed=int(args.seed) if args.seed is not None else config.seed,
         device=str(args.device) if args.device is not None else config.device,
         observation=observation,
+        agent=agent,
+        proxy_safety=proxy_safety,
         env=env,
         schedule=schedule,
         logging=logging,

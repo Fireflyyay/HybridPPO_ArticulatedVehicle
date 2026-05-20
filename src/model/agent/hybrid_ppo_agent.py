@@ -9,7 +9,7 @@ from torch.distributions import Categorical
 
 from common.config import HybridPPOConfig
 from common.types import MacroAction, MacroTransition
-from primitives.library import ParameterizedPrimitiveLibrary
+from primitives.library import ParameterizedPrimitiveLibrary, SemanticPrimitive
 from ..buffer import SMDPBatch, SMDPRolloutBuffer
 from ..distributions import AffineBeta
 from ..networks import HybridPolicyNetwork, ValueNetwork
@@ -43,11 +43,21 @@ class HybridPPOAgent:
         self.buffer = SMDPRolloutBuffer()
         self._low = torch.as_tensor(self.primitive_library.low, dtype=torch.float32, device=self.device)
         self._high = torch.as_tensor(self.primitive_library.high, dtype=torch.float32, device=self.device)
+        self._action_active_mask = torch.as_tensor(
+            np.stack([self.primitive_library.active_mask(action_id).astype(np.float32) for action_id in range(self.primitive_library.action_dim)], axis=0),
+            dtype=torch.float32,
+            device=self.device,
+        )
+        self._fallback_action_bias = self._build_fallback_action_bias()
+        self._proxy_cache_token = None
+        self._proxy_parameter_centers = None
+        self._proxy_parameter_scales = None
+        self._proxy_valid_mask = None
 
     def act(self, observation: np.ndarray, deterministic: bool = False) -> ActionSelection:
         obs_tensor = self._obs_tensor(observation)
-        logits = self.policy.discrete_logits(obs_tensor)
-        discrete_dist = Categorical(logits=logits)
+        policy_context = self._masked_policy_context(obs_tensor)
+        discrete_dist = Categorical(logits=policy_context["masked_logits"])
         action_ids = torch.argmax(discrete_dist.probs, dim=-1) if deterministic else discrete_dist.sample()
         continuous_dist = self._continuous_dist(obs_tensor, action_ids)
         parameters = continuous_dist.mean if deterministic else continuous_dist.sample()
@@ -102,6 +112,8 @@ class HybridPPOAgent:
         last_value_loss = 0.0
         last_entropy_d = 0.0
         last_entropy_c = 0.0
+        last_safety_loss = 0.0
+        last_sampled_safety_score = 0.0
 
         for _ in range(int(self.config.update_epochs)):
             np.random.shuffle(indices)
@@ -114,13 +126,14 @@ class HybridPPOAgent:
                 adv_mb = advantages[mb]
                 return_mb = returns[mb]
                 old_log_prob_mb = old_log_probs[mb]
-                total_log_prob, entropy_d, entropy_c = self.evaluate_actions(obs_mb, action_mb, param_mb)
+                total_log_prob, entropy_d, entropy_c, safety_loss, sampled_safety_score = self.evaluate_actions(obs_mb, action_mb, param_mb)
                 ratio = torch.exp(total_log_prob - old_log_prob_mb)
                 surrogate_1 = ratio * adv_mb
                 surrogate_2 = torch.clamp(ratio, 1.0 - self.config.clip_epsilon, 1.0 + self.config.clip_epsilon) * adv_mb
                 actor_loss = -torch.min(surrogate_1, surrogate_2).mean()
                 actor_loss -= self.config.entropy_coef_discrete * entropy_d.mean()
                 actor_loss -= self.config.entropy_coef_continuous * entropy_c.mean()
+                actor_loss += float(self.config.safety_loss_coef) * safety_loss.mean()
                 predicted_values = self.value_net(obs_mb).squeeze(-1)
                 value_loss = F.mse_loss(predicted_values, return_mb)
 
@@ -138,25 +151,30 @@ class HybridPPOAgent:
                 last_value_loss = float(value_loss.item())
                 last_entropy_d = float(entropy_d.mean().item())
                 last_entropy_c = float(entropy_c.mean().item())
+                last_safety_loss = float(safety_loss.mean().item())
+                last_sampled_safety_score = float(sampled_safety_score.mean().item())
 
         return {
             "actor_loss": last_actor_loss,
             "value_loss": last_value_loss,
             "entropy_discrete": last_entropy_d,
             "entropy_continuous": last_entropy_c,
+            "safety_loss": last_safety_loss,
+            "sampled_safety_score": last_sampled_safety_score,
             "advantage_mean": float(advantages.mean().item()),
             "return_mean": float(returns.mean().item()),
         }
 
-    def evaluate_actions(self, observations: torch.Tensor, action_ids: torch.Tensor, parameters: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        logits = self.policy.discrete_logits(observations)
-        discrete_dist = Categorical(logits=logits)
+    def evaluate_actions(self, observations: torch.Tensor, action_ids: torch.Tensor, parameters: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        policy_context = self._masked_policy_context(observations)
+        discrete_dist = Categorical(logits=policy_context["masked_logits"])
         continuous_dist = self._continuous_dist(observations, action_ids)
         active_mask = self._active_mask_tensor(action_ids)
         discrete_log_prob = discrete_dist.log_prob(action_ids)
         continuous_log_prob = continuous_dist.masked_log_prob(parameters, active_mask)
         total_log_prob = discrete_log_prob + continuous_log_prob
-        return total_log_prob, discrete_dist.entropy(), continuous_dist.masked_entropy(active_mask)
+        safety_loss, sampled_safety_score = self._continuous_safety_terms(policy_context, action_ids, parameters)
+        return total_log_prob, discrete_dist.entropy(), continuous_dist.masked_entropy(active_mask), safety_loss, sampled_safety_score
 
     def estimate_value(self, observation: np.ndarray) -> float:
         with torch.no_grad():
@@ -188,6 +206,186 @@ class HybridPPOAgent:
         action_list = action_ids.detach().cpu().tolist()
         masks = [self.primitive_library.active_mask(int(action_id)).astype(np.float32) for action_id in action_list]
         return torch.as_tensor(np.stack(masks, axis=0), dtype=torch.float32, device=self.device)
+
+    def _masked_policy_context(self, observations: torch.Tensor) -> Dict[str, torch.Tensor]:
+        raw_logits = self.policy.discrete_logits(observations)
+        context = {
+            "raw_logits": raw_logits,
+            "masked_logits": raw_logits,
+            "semantic_scores": torch.ones_like(raw_logits),
+            "proxy_scores": None,
+            "all_action_means": None,
+            "all_action_stds": None,
+        }
+        if not self._soft_mask_enabled():
+            return context
+
+        self._ensure_proxy_tensors()
+        proxy_scores, _articulation_bins = self._query_proxy_scores(observations)
+        proxy_scores_tensor = torch.as_tensor(proxy_scores, dtype=torch.float32, device=self.device)
+        all_action_means, all_action_stds = self._all_action_distribution_moments(observations)
+        semantic_scores = self._distribution_aware_semantic_scores(
+            all_action_means=all_action_means,
+            all_action_stds=all_action_stds,
+            proxy_scores=proxy_scores_tensor,
+        )
+        masked_logits = self._apply_semantic_soft_mask(raw_logits=raw_logits, semantic_scores=semantic_scores)
+        context.update(
+            {
+                "masked_logits": masked_logits,
+                "semantic_scores": semantic_scores,
+                "proxy_scores": proxy_scores_tensor,
+                "all_action_means": all_action_means,
+                "all_action_stds": all_action_stds,
+            }
+        )
+        return context
+
+    def _soft_mask_enabled(self) -> bool:
+        return bool(self.config.soft_mask_enabled and self.primitive_library.proxy_sidecar is not None)
+
+    def _ensure_proxy_tensors(self) -> None:
+        sidecar = self.primitive_library.proxy_sidecar
+        if sidecar is None:
+            self._proxy_cache_token = None
+            self._proxy_parameter_centers = None
+            self._proxy_parameter_scales = None
+            self._proxy_valid_mask = None
+            return
+        token = id(sidecar)
+        if token == self._proxy_cache_token:
+            return
+        self._proxy_cache_token = token
+        self._proxy_parameter_centers = torch.as_tensor(sidecar.parameter_centers, dtype=torch.float32, device=self.device)
+        self._proxy_parameter_scales = torch.as_tensor(np.maximum(sidecar.parameter_scales, float(self.config.soft_mask_eps)), dtype=torch.float32, device=self.device)
+        self._proxy_valid_mask = torch.as_tensor(sidecar.proxy_valid_mask.astype(np.float32), dtype=torch.float32, device=self.device)
+
+    def _query_proxy_scores(self, observations: torch.Tensor) -> Tuple[np.ndarray, np.ndarray]:
+        sidecar = self.primitive_library.proxy_sidecar
+        if sidecar is None:
+            raise RuntimeError("proxy safety sidecar is required when soft mask is enabled")
+        observation_np = observations.detach().cpu().numpy()
+        feature_offset = int(sidecar.num_rays)
+        if observation_np.shape[1] < feature_offset + 7:
+            raise ValueError("observation does not contain enough post-lidar features to reconstruct articulation angle")
+        scores = []
+        bins = []
+        for row in observation_np:
+            articulation_angle = float(np.arctan2(row[feature_offset + 6], row[feature_offset + 5]))
+            query = sidecar.compute_proxy_scores(
+                lidar_observation=row[:feature_offset],
+                articulation_angle=articulation_angle,
+                gamma=float(self.config.soft_mask_gamma),
+                eps=float(self.config.soft_mask_eps),
+            )
+            scores.append(query.proxy_scores)
+            bins.append(query.articulation_bin_index)
+        return np.stack(scores, axis=0).astype(np.float32), np.asarray(bins, dtype=np.int64)
+
+    def _all_action_distribution_moments(self, observations: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        means = []
+        stds = []
+        batch_size = observations.shape[0]
+        for action_id in range(self.primitive_library.action_dim):
+            action_tensor = torch.full((batch_size,), int(action_id), dtype=torch.int64, device=self.device)
+            dist = self._continuous_dist(observations, action_tensor)
+            means.append(dist.mean)
+            stds.append(dist.stddev)
+        return torch.stack(means, dim=1), torch.stack(stds, dim=1)
+
+    def _distribution_aware_semantic_scores(self, all_action_means: torch.Tensor, all_action_stds: torch.Tensor, proxy_scores: torch.Tensor) -> torch.Tensor:
+        active_mask = self._action_active_mask.unsqueeze(0).unsqueeze(2)
+        proxy_centers = self._proxy_parameter_centers.unsqueeze(0)
+        proxy_scales = self._proxy_parameter_scales.unsqueeze(0)
+        means = all_action_means.unsqueeze(2)
+        stds = all_action_stds.unsqueeze(2)
+        denom = torch.clamp(proxy_scales + stds, min=float(self.config.soft_mask_eps))
+        squared_distance = torch.square((means - proxy_centers) / denom) * active_mask
+        active_count = torch.clamp(active_mask.sum(dim=-1), min=1.0)
+        normalized_distance = squared_distance.sum(dim=-1) / active_count
+        temperature = max(float(self.config.soft_mask_temperature), 1e-6)
+        proxy_similarity = torch.exp(-0.5 * normalized_distance / (temperature * temperature)) * self._proxy_valid_mask.unsqueeze(0)
+        similarity_sum = proxy_similarity.sum(dim=-1)
+        semantic_scores = (proxy_similarity * proxy_scores).sum(dim=-1) / torch.clamp(similarity_sum, min=float(self.config.soft_mask_eps))
+        semantic_scores = torch.where(similarity_sum > 0.0, semantic_scores, torch.zeros_like(semantic_scores))
+        return torch.clamp(semantic_scores, 0.0, 1.0)
+
+    def _apply_semantic_soft_mask(self, raw_logits: torch.Tensor, semantic_scores: torch.Tensor) -> torch.Tensor:
+        floor = min(1.0, max(float(self.config.soft_mask_floor), float(self.config.soft_mask_eps)))
+        effective_scores = torch.clamp(semantic_scores, min=floor, max=1.0)
+        masked_logits = raw_logits + float(self.config.soft_mask_logit_scale) * torch.log(effective_scores)
+        all_invalid = torch.all(semantic_scores <= floor + 1e-6, dim=-1)
+        if torch.any(all_invalid):
+            masked_logits = masked_logits + all_invalid.to(dtype=masked_logits.dtype).unsqueeze(-1) * self._fallback_action_bias.unsqueeze(0)
+        return masked_logits
+
+    def _continuous_safety_terms(self, policy_context: Dict[str, torch.Tensor], action_ids: torch.Tensor, parameters: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        batch_size = action_ids.shape[0]
+        if not self._soft_mask_enabled() or policy_context["proxy_scores"] is None:
+            zeros = torch.zeros((batch_size,), dtype=torch.float32, device=self.device)
+            return zeros, zeros
+
+        batch_indices = torch.arange(batch_size, device=self.device)
+        selected_proxy_scores = policy_context["proxy_scores"][batch_indices, action_ids]
+        selected_proxy_centers = self._proxy_parameter_centers[action_ids]
+        selected_proxy_scales = self._proxy_parameter_scales[action_ids]
+        selected_proxy_valid = self._proxy_valid_mask[action_ids]
+        selected_active_mask = self._action_active_mask[action_ids]
+        selected_means = policy_context["all_action_means"][batch_indices, action_ids]
+        selected_stds = policy_context["all_action_stds"][batch_indices, action_ids]
+
+        sampled_similarity = self._proxy_parameter_similarity(
+            parameter_values=parameters,
+            proxy_centers=selected_proxy_centers,
+            proxy_scales=selected_proxy_scales,
+            active_mask=selected_active_mask,
+        ) * selected_proxy_valid
+        sampled_score = self._weighted_proxy_score(selected_proxy_scores, sampled_similarity)
+
+        mean_similarity = self._proxy_parameter_similarity(
+            parameter_values=selected_means,
+            proxy_centers=selected_proxy_centers,
+            proxy_scales=selected_proxy_scales + selected_stds.unsqueeze(1),
+            active_mask=selected_active_mask,
+        ) * selected_proxy_valid
+        mean_score = self._weighted_proxy_score(selected_proxy_scores, mean_similarity)
+        safety_loss = 1.0 - mean_score
+        return safety_loss, sampled_score
+
+    def _proxy_parameter_similarity(self, parameter_values: torch.Tensor, proxy_centers: torch.Tensor, proxy_scales: torch.Tensor, active_mask: torch.Tensor) -> torch.Tensor:
+        expanded_mask = active_mask.unsqueeze(1)
+        values = parameter_values.unsqueeze(1)
+        denom = torch.clamp(proxy_scales, min=float(self.config.soft_mask_eps))
+        squared_distance = torch.square((values - proxy_centers) / denom) * expanded_mask
+        active_count = torch.clamp(expanded_mask.sum(dim=-1), min=1.0)
+        normalized_distance = squared_distance.sum(dim=-1) / active_count
+        temperature = max(float(self.config.continuous_safety_temperature), 1e-6)
+        return torch.exp(-0.5 * normalized_distance / (temperature * temperature))
+
+    def _weighted_proxy_score(self, proxy_scores: torch.Tensor, proxy_similarity: torch.Tensor) -> torch.Tensor:
+        similarity_sum = proxy_similarity.sum(dim=-1)
+        weighted = (proxy_similarity * proxy_scores).sum(dim=-1) / torch.clamp(similarity_sum, min=float(self.config.soft_mask_eps))
+        weighted = torch.where(similarity_sum > 0.0, weighted, torch.zeros_like(weighted))
+        return torch.clamp(weighted, 0.0, 1.0)
+
+    def _build_fallback_action_bias(self) -> torch.Tensor:
+        bias = np.zeros((self.primitive_library.action_dim,), dtype=np.float32)
+        fallback_bonus = float(self.config.soft_mask_fallback_bonus)
+        if fallback_bonus <= 0.0:
+            return torch.zeros((self.primitive_library.action_dim,), dtype=torch.float32, device=self.device)
+        fallback_map = {
+            SemanticPrimitive.STOP_CHECK: fallback_bonus,
+            SemanticPrimitive.ARTICULATION_RECOVER: 0.75 * fallback_bonus,
+            SemanticPrimitive.STRAIGHT_ADJUST: 0.5 * fallback_bonus,
+        }
+        matched = False
+        for spec in self.primitive_library.specs:
+            if spec.semantic in fallback_map:
+                bias[int(spec.primitive_id)] = float(fallback_map[spec.semantic])
+                matched = True
+        if not matched and bias.size > 0:
+            bias[0] = fallback_bonus
+        return torch.as_tensor(bias, dtype=torch.float32, device=self.device)
 
     def _obs_tensor(self, observation: np.ndarray) -> torch.Tensor:
         obs = torch.as_tensor(observation, dtype=torch.float32, device=self.device)

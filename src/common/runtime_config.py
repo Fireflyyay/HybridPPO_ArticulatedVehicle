@@ -19,14 +19,14 @@ class ObservationConfig:
 
 @dataclass(frozen=True)
 class RewardConfig:
-    progress_weight: float = 4.0
+    progress_weight: float = 10.0
     heading_weight: float = 0.5
-    overlap_weight: float = 2.0
+    overlap_weight: float = 10.0
     step_penalty: float = -0.05
     success_reward: float = 25.0
     collision_penalty: float = -25.0
     out_of_bounds_penalty: float = -25.0
-    timeout_penalty: float = -5.0
+    timeout_penalty: float = -15.0
 
 
 @dataclass(frozen=True)
@@ -110,6 +110,15 @@ class HybridPPOHyperConfig:
     mini_batch_size: int = 1024
     update_epochs: int = 10
     std_floor: float = 0.05
+    soft_mask_enabled: bool = False
+    soft_mask_gamma: float = 1.0
+    soft_mask_eps: float = 1e-4
+    soft_mask_logit_scale: float = 1.0
+    soft_mask_floor: float = 0.2
+    soft_mask_temperature: float = 1.0
+    soft_mask_fallback_bonus: float = 1.5
+    continuous_safety_temperature: float = 1.0
+    safety_loss_coef: float = 0.0
 
     def build(self, observation_dim: int, action_dim: int, parameter_dim: int) -> HybridPPOConfig:
         return HybridPPOConfig(
@@ -130,13 +139,27 @@ class HybridPPOHyperConfig:
             mini_batch_size=int(self.mini_batch_size),
             update_epochs=int(self.update_epochs),
             std_floor=float(self.std_floor),
+            soft_mask_enabled=bool(self.soft_mask_enabled),
+            soft_mask_gamma=float(self.soft_mask_gamma),
+            soft_mask_eps=float(self.soft_mask_eps),
+            soft_mask_logit_scale=float(self.soft_mask_logit_scale),
+            soft_mask_floor=float(self.soft_mask_floor),
+            soft_mask_temperature=float(self.soft_mask_temperature),
+            soft_mask_fallback_bonus=float(self.soft_mask_fallback_bonus),
+            continuous_safety_temperature=float(self.continuous_safety_temperature),
+            safety_loss_coef=float(self.safety_loss_coef),
         )
+
+
+@dataclass(frozen=True)
+class ProxySafetyConfig:
+    sidecar_path: str = ""
 
 
 @dataclass(frozen=True)
 class TrainingScheduleConfig:
     total_episodes: int = 10000
-    episodes_per_update: int = 512
+    episodes_per_update: int = 128
     max_macro_steps_per_episode: int = 64
     debug_phase_episodes: int = 1000
     warmup_level: str = "Warmup"
@@ -185,6 +208,7 @@ class ExperimentConfig:
     reward: RewardConfig = field(default_factory=RewardConfig)
     env: EnvRuntimeConfig = field(default_factory=EnvRuntimeConfig)
     agent: HybridPPOHyperConfig = field(default_factory=HybridPPOHyperConfig)
+    proxy_safety: ProxySafetyConfig = field(default_factory=ProxySafetyConfig)
     schedule: TrainingScheduleConfig = field(default_factory=TrainingScheduleConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     checkpoint: CheckpointConfig = field(default_factory=CheckpointConfig)
