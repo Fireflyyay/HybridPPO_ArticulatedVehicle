@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Tuple
 
 import numpy as np
-from shapely.geometry import LineString, Point, box
+from shapely.geometry import box
 from shapely.ops import unary_union
 
 from common.config import VehicleConfig
@@ -44,6 +44,17 @@ class KinematicTaskEnv:
         self._goal_state: Optional[ArticulatedState] = None
         self._obstacle_union = None
         self._world_box = None
+        self._beam_angle_offsets = np.linspace(
+            -np.pi,
+            np.pi,
+            int(self.observation_config.lidar_num_beams),
+            endpoint=False,
+            dtype=np.float64,
+        )
+        self._obstacle_segment_x1 = np.empty((0,), dtype=np.float64)
+        self._obstacle_segment_y1 = np.empty((0,), dtype=np.float64)
+        self._obstacle_segment_dx = np.empty((0,), dtype=np.float64)
+        self._obstacle_segment_dy = np.empty((0,), dtype=np.float64)
         self._step_count = 0
         self._last_info: Dict[str, object] = {}
 
@@ -55,10 +66,11 @@ class KinematicTaskEnv:
         if seed is not None:
             self._rng = np.random.default_rng(int(seed))
         level = str((options or {}).get("level", self.env_config.default_level))
-        self._scene = self.scene_factory.generate(level, self._rng)
+        self._scene = self.scene_factory.generate(level, self._rng, options=options)
         self._state = self._scene.start_state
         self._goal_state = self._scene.goal_state
         self._obstacle_union = None if len(self._scene.obstacles) == 0 else unary_union(list(self._scene.obstacles))
+        self._cache_obstacle_segments()
         xmin, xmax, ymin, ymax = self._scene.world_bounds
         self._world_box = box(xmin, ymin, xmax, ymax)
         self._step_count = 0
@@ -263,50 +275,130 @@ class KinematicTaskEnv:
     def _lidar_observation(self, state: ArticulatedState) -> np.ndarray:
         beam_count = int(self.observation_config.lidar_num_beams)
         max_range = float(self.observation_config.lidar_max_range)
-        origin = Point(float(state.x), float(state.y))
-        values = np.full((beam_count,), max_range, dtype=np.float32)
-        beam_angles = np.linspace(-np.pi, np.pi, beam_count, endpoint=False)
-        for index, beam_angle in enumerate(beam_angles):
-            heading = float(state.front_heading + beam_angle)
-            bound_distance = self._distance_to_bounds(float(state.x), float(state.y), heading, max_range)
-            obstacle_distance = self._distance_to_obstacles(origin, heading, max_range)
-            values[index] = float(min(max_range, bound_distance, obstacle_distance) / max(max_range, 1e-6))
-        return values.astype(np.float32)
+        headings = float(state.front_heading) + self._beam_angle_offsets
+        ray_dx = np.cos(headings)
+        ray_dy = np.sin(headings)
+        bound_distance = self._distance_to_scene_bounds(float(state.x), float(state.y), ray_dx, ray_dy, max_range)
+        obstacle_distance = self._distance_to_obstacle_segments(float(state.x), float(state.y), ray_dx, ray_dy, max_range)
+        values = np.minimum(bound_distance, obstacle_distance)
+        if values.shape[0] != beam_count:
+            raise RuntimeError("lidar distance computation returned unexpected beam count")
+        return (values / max(max_range, 1e-6)).astype(np.float32)
 
-    def _distance_to_bounds(self, x: float, y: float, heading: float, max_range: float) -> float:
+    def _cache_obstacle_segments(self) -> None:
+        if self._scene is None or len(self._scene.obstacles) == 0:
+            self._obstacle_segment_x1 = np.empty((0,), dtype=np.float64)
+            self._obstacle_segment_y1 = np.empty((0,), dtype=np.float64)
+            self._obstacle_segment_dx = np.empty((0,), dtype=np.float64)
+            self._obstacle_segment_dy = np.empty((0,), dtype=np.float64)
+            return
+
+        x1s = []
+        y1s = []
+        x2s = []
+        y2s = []
+        for polygon in self._scene.obstacles:
+            self._append_ring_segments(np.asarray(polygon.exterior.coords, dtype=np.float64), x1s, y1s, x2s, y2s)
+            for interior in polygon.interiors:
+                self._append_ring_segments(np.asarray(interior.coords, dtype=np.float64), x1s, y1s, x2s, y2s)
+
+        if len(x1s) == 0:
+            self._obstacle_segment_x1 = np.empty((0,), dtype=np.float64)
+            self._obstacle_segment_y1 = np.empty((0,), dtype=np.float64)
+            self._obstacle_segment_dx = np.empty((0,), dtype=np.float64)
+            self._obstacle_segment_dy = np.empty((0,), dtype=np.float64)
+            return
+
+        self._obstacle_segment_x1 = np.asarray(x1s, dtype=np.float64)
+        self._obstacle_segment_y1 = np.asarray(y1s, dtype=np.float64)
+        self._obstacle_segment_dx = np.asarray(x2s, dtype=np.float64) - self._obstacle_segment_x1
+        self._obstacle_segment_dy = np.asarray(y2s, dtype=np.float64) - self._obstacle_segment_y1
+
+    @staticmethod
+    def _append_ring_segments(
+        coords: np.ndarray,
+        x1s: list,
+        y1s: list,
+        x2s: list,
+        y2s: list,
+    ) -> None:
+        if coords.ndim != 2 or coords.shape[0] < 2:
+            return
+        x1s.extend(coords[:-1, 0].tolist())
+        y1s.extend(coords[:-1, 1].tolist())
+        x2s.extend(coords[1:, 0].tolist())
+        y2s.extend(coords[1:, 1].tolist())
+
+    def _distance_to_scene_bounds(
+        self,
+        x: float,
+        y: float,
+        ray_dx: np.ndarray,
+        ray_dy: np.ndarray,
+        max_range: float,
+    ) -> np.ndarray:
         if self._scene is None:
-            return float(max_range)
+            return np.full(ray_dx.shape, float(max_range), dtype=np.float64)
         xmin, xmax, ymin, ymax = self._scene.world_bounds
-        cos_heading = float(np.cos(heading))
-        sin_heading = float(np.sin(heading))
-        distances = []
-        if abs(cos_heading) > 1e-9:
-            tx = (xmax - x) / cos_heading if cos_heading > 0.0 else (xmin - x) / cos_heading
-            if tx > 0.0:
-                y_hit = y + tx * sin_heading
-                if ymin - 1e-6 <= y_hit <= ymax + 1e-6:
-                    distances.append(float(tx))
-        if abs(sin_heading) > 1e-9:
-            ty = (ymax - y) / sin_heading if sin_heading > 0.0 else (ymin - y) / sin_heading
-            if ty > 0.0:
-                x_hit = x + ty * cos_heading
-                if xmin - 1e-6 <= x_hit <= xmax + 1e-6:
-                    distances.append(float(ty))
-        return float(min(distances) if distances else max_range)
+        epsilon = 1e-9
+        tolerance = 1e-6
+        tx = np.full(ray_dx.shape, np.inf, dtype=np.float64)
+        positive_x = ray_dx > epsilon
+        negative_x = ray_dx < -epsilon
+        tx[positive_x] = (float(xmax) - x) / ray_dx[positive_x]
+        tx[negative_x] = (float(xmin) - x) / ray_dx[negative_x]
+        y_hit = y + tx * ray_dy
+        invalid_tx = (tx <= 0.0) | (y_hit < float(ymin) - tolerance) | (y_hit > float(ymax) + tolerance)
+        tx[invalid_tx] = np.inf
 
-    def _distance_to_obstacles(self, origin: Point, heading: float, max_range: float) -> float:
-        if self._obstacle_union is None:
-            return float(max_range)
-        ray = LineString(
-            [
-                (float(origin.x), float(origin.y)),
-                (float(origin.x + max_range * np.cos(heading)), float(origin.y + max_range * np.sin(heading))),
-            ]
+        ty = np.full(ray_dy.shape, np.inf, dtype=np.float64)
+        positive_y = ray_dy > epsilon
+        negative_y = ray_dy < -epsilon
+        ty[positive_y] = (float(ymax) - y) / ray_dy[positive_y]
+        ty[negative_y] = (float(ymin) - y) / ray_dy[negative_y]
+        x_hit = x + ty * ray_dx
+        invalid_ty = (ty <= 0.0) | (x_hit < float(xmin) - tolerance) | (x_hit > float(xmax) + tolerance)
+        ty[invalid_ty] = np.inf
+
+        distances = np.minimum(tx, ty)
+        distances[~np.isfinite(distances)] = float(max_range)
+        return np.minimum(distances, float(max_range))
+
+    def _distance_to_obstacle_segments(
+        self,
+        x: float,
+        y: float,
+        ray_dx: np.ndarray,
+        ray_dy: np.ndarray,
+        max_range: float,
+    ) -> np.ndarray:
+        if self._obstacle_segment_x1.size == 0:
+            return np.full(ray_dx.shape, float(max_range), dtype=np.float64)
+
+        epsilon = 1e-9
+        qmp_x = self._obstacle_segment_x1.reshape(1, -1) - float(x)
+        qmp_y = self._obstacle_segment_y1.reshape(1, -1) - float(y)
+        seg_dx = self._obstacle_segment_dx.reshape(1, -1)
+        seg_dy = self._obstacle_segment_dy.reshape(1, -1)
+        ray_dx_2d = ray_dx.reshape(-1, 1)
+        ray_dy_2d = ray_dy.reshape(-1, 1)
+
+        determinant = ray_dx_2d * seg_dy - ray_dy_2d * seg_dx
+        parallel = np.abs(determinant) <= epsilon
+        safe_determinant = np.where(parallel, 1.0, determinant)
+        distance_along_ray = (qmp_x * seg_dy - qmp_y * seg_dx) / safe_determinant
+        edge_position = (qmp_x * ray_dy_2d - qmp_y * ray_dx_2d) / safe_determinant
+        valid = (
+            (~parallel)
+            & (distance_along_ray >= 0.0)
+            & (distance_along_ray <= float(max_range))
+            & (edge_position >= -epsilon)
+            & (edge_position <= 1.0 + epsilon)
         )
-        intersection = ray.intersection(self._obstacle_union)
-        if intersection.is_empty:
-            return float(max_range)
-        return float(min(max_range, origin.distance(intersection)))
+        distance_along_ray = np.where(valid, distance_along_ray, np.inf)
+        distances = np.min(distance_along_ray, axis=1)
+        distances[~np.isfinite(distances)] = float(max_range)
+        return distances
 
     def _intersects_obstacles(self, state: ArticulatedState) -> bool:
         if self._obstacle_union is None:
