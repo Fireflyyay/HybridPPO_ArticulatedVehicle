@@ -66,9 +66,9 @@ class HybridPPOAgent:
     def act(self, observation: np.ndarray, deterministic: bool = False) -> ActionSelection:
         obs_tensor = self._obs_tensor(observation)
         policy_context = self._masked_policy_context(obs_tensor)
-        discrete_dist = Categorical(logits=policy_context["masked_logits"])
+        discrete_dist = Categorical(probs=policy_context["masked_probs"])
         action_ids = torch.argmax(discrete_dist.probs, dim=-1) if deterministic else discrete_dist.sample()
-        continuous_dist = self._continuous_dist(obs_tensor, action_ids)
+        continuous_dist = self._continuous_dist(obs_tensor, action_ids, action_mask=policy_context["network_action_mask"])
         parameters = continuous_dist.mean if deterministic else continuous_dist.sample()
         active_mask = self._active_mask_tensor(action_ids)
         discrete_log_prob = discrete_dist.log_prob(action_ids)
@@ -176,13 +176,13 @@ class HybridPPOAgent:
 
     def evaluate_actions(self, observations: torch.Tensor, action_ids: torch.Tensor, parameters: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         policy_context = self._masked_policy_context(observations)
-        discrete_dist = Categorical(logits=policy_context["masked_logits"])
-        continuous_dist = self._continuous_dist(observations, action_ids)
+        discrete_dist = Categorical(probs=policy_context["masked_probs"])
+        continuous_dist = self._continuous_dist(observations, action_ids, action_mask=policy_context["network_action_mask"])
         active_mask = self._active_mask_tensor(action_ids)
         discrete_log_prob = discrete_dist.log_prob(action_ids)
         continuous_log_prob = continuous_dist.masked_log_prob(parameters, active_mask)
         total_log_prob = discrete_log_prob + continuous_log_prob
-        safety_loss, sampled_safety_score = self._continuous_safety_terms(policy_context, action_ids, parameters)
+        safety_loss, sampled_safety_score = self._continuous_safety_terms(observations, policy_context, action_ids, parameters)
         return total_log_prob, discrete_dist.entropy(), continuous_dist.masked_entropy(active_mask), safety_loss, sampled_safety_score
 
     def estimate_value(self, observation: np.ndarray) -> float:
@@ -204,8 +204,8 @@ class HybridPPOAgent:
         self.actor_optimizer.load_state_dict(checkpoint_state["actor_optimizer"])
         self.critic_optimizer.load_state_dict(checkpoint_state["critic_optimizer"])
 
-    def _continuous_dist(self, observations: torch.Tensor, action_ids: torch.Tensor) -> AffineBeta:
-        raw = self.policy.continuous_raw(observations, action_ids)
+    def _continuous_dist(self, observations: torch.Tensor, action_ids: torch.Tensor, action_mask: Optional[torch.Tensor] = None) -> AffineBeta:
+        raw = self.policy.continuous_raw(observations, action_ids, action_mask=action_mask)
         alpha_raw, beta_raw = torch.chunk(raw, 2, dim=-1)
         alpha = F.softplus(alpha_raw) + 1.0
         beta = F.softplus(beta_raw) + 1.0
@@ -217,42 +217,57 @@ class HybridPPOAgent:
         return torch.as_tensor(np.stack(masks, axis=0), dtype=torch.float32, device=self.device)
 
     def _masked_policy_context(self, observations: torch.Tensor) -> Dict[str, torch.Tensor]:
-        raw_logits = self.policy.discrete_logits(observations)
         state_gate_valid_mask = self._state_gate_valid_mask(observations)
+        proxy_scores_tensor = None
+        proxy_prefix_lengths_tensor = None
+        proxy_action_mask = torch.ones((observations.shape[0], self.primitive_library.action_dim), dtype=torch.float32, device=self.device)
+        proxy_action_has_safe_prefix = torch.ones_like(state_gate_valid_mask)
+        if self._soft_mask_enabled():
+            self._ensure_proxy_tensors()
+            proxy_scores, proxy_prefix_lengths, _articulation_bins = self._query_proxy_scores(observations)
+            proxy_scores_tensor = torch.as_tensor(proxy_scores, dtype=torch.float32, device=self.device)
+            proxy_prefix_lengths_tensor = torch.as_tensor(proxy_prefix_lengths, dtype=torch.float32, device=self.device)
+            proxy_action_mask, proxy_action_has_safe_prefix = self._aggregate_proxy_action_mask(
+                proxy_scores=proxy_scores_tensor,
+                proxy_prefix_lengths=proxy_prefix_lengths_tensor,
+            )
+
+        network_action_mask = proxy_action_mask * state_gate_valid_mask.to(dtype=proxy_action_mask.dtype)
+        selection_action_mask = self._selection_action_mask(
+            proxy_action_mask=proxy_action_mask,
+            proxy_action_has_safe_prefix=proxy_action_has_safe_prefix,
+            state_gate_valid_mask=state_gate_valid_mask,
+        )
+        raw_logits = self.policy.discrete_logits(observations, action_mask=network_action_mask)
+        raw_probs = torch.softmax(raw_logits, dim=-1)
+        masked_probs = self._reweighted_action_probs(
+            raw_logits=raw_logits,
+            action_mask=selection_action_mask,
+            state_gate_valid_mask=state_gate_valid_mask,
+        )
         context = {
             "raw_logits": raw_logits,
-            "masked_logits": self._apply_state_gate_mask(raw_logits, state_gate_valid_mask),
-            "semantic_scores": torch.ones_like(raw_logits),
+            "raw_probs": raw_probs,
+            "masked_logits": self._probs_to_logits(masked_probs),
+            "masked_probs": masked_probs,
+            "semantic_scores": proxy_action_mask,
             "state_gate_valid_mask": state_gate_valid_mask,
+            "network_action_mask": network_action_mask,
+            "selection_action_mask": selection_action_mask,
+            "proxy_action_mask": proxy_action_mask,
+            "proxy_action_has_safe_prefix": proxy_action_has_safe_prefix,
             "proxy_scores": None,
+            "proxy_prefix_lengths": None,
             "all_action_means": None,
             "all_action_stds": None,
         }
-        if not self._soft_mask_enabled():
-            return context
-
-        self._ensure_proxy_tensors()
-        proxy_scores, _articulation_bins = self._query_proxy_scores(observations)
-        proxy_scores_tensor = torch.as_tensor(proxy_scores, dtype=torch.float32, device=self.device)
-        all_action_means, all_action_stds = self._all_action_distribution_moments(observations)
-        semantic_scores = self._distribution_aware_semantic_scores(
-            all_action_means=all_action_means,
-            all_action_stds=all_action_stds,
-            proxy_scores=proxy_scores_tensor,
-        )
-        masked_logits = self._apply_state_gate_mask(
-            self._apply_semantic_soft_mask(raw_logits=raw_logits, semantic_scores=semantic_scores),
-            state_gate_valid_mask,
-        )
-        context.update(
-            {
-                "masked_logits": masked_logits,
-                "semantic_scores": semantic_scores,
-                "proxy_scores": proxy_scores_tensor,
-                "all_action_means": all_action_means,
-                "all_action_stds": all_action_stds,
-            }
-        )
+        if self._soft_mask_enabled():
+            context.update(
+                {
+                    "proxy_scores": proxy_scores_tensor,
+                    "proxy_prefix_lengths": proxy_prefix_lengths_tensor,
+                }
+            )
         return context
 
     def _action_ids_for_semantic(self, semantic: SemanticPrimitive) -> Tuple[int, ...]:
@@ -308,6 +323,78 @@ class HybridPPOAgent:
         all_invalid = ~torch.any(valid_mask, dim=-1, keepdim=True)
         return torch.where(all_invalid, logits, masked_logits)
 
+    def _aggregate_proxy_action_mask(self, proxy_scores: torch.Tensor, proxy_prefix_lengths: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        action_scores = torch.max(torch.clamp(proxy_scores, 0.0, 1.0), dim=-1).values
+        has_safe_prefix = torch.max(proxy_prefix_lengths, dim=-1).values > 0.0
+        action_scores = torch.where(has_safe_prefix, action_scores, torch.zeros_like(action_scores))
+        return action_scores, has_safe_prefix
+
+    def _selection_action_mask(
+        self,
+        proxy_action_mask: torch.Tensor,
+        proxy_action_has_safe_prefix: torch.Tensor,
+        state_gate_valid_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        gate_weights = state_gate_valid_mask.to(dtype=proxy_action_mask.dtype)
+        if not self._soft_mask_enabled():
+            return gate_weights
+        floor = min(1.0, max(float(self.config.soft_mask_floor), float(self.config.soft_mask_eps)))
+        clipped = torch.clamp(proxy_action_mask, 0.0, 1.0)
+        softened = torch.where(
+            proxy_action_has_safe_prefix,
+            torch.clamp(clipped, min=floor, max=1.0),
+            torch.zeros_like(clipped),
+        )
+        return softened * gate_weights
+
+    def _reweighted_action_probs(
+        self,
+        raw_logits: torch.Tensor,
+        action_mask: torch.Tensor,
+        state_gate_valid_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        raw_probs = torch.softmax(raw_logits, dim=-1)
+        weights = torch.clamp(action_mask.to(dtype=raw_probs.dtype), min=0.0, max=1.0)
+        scale = max(float(self.config.soft_mask_logit_scale), 0.0)
+        if scale != 1.0:
+            positive = weights > 0.0
+            weights = torch.where(positive, torch.pow(weights, scale), weights)
+        weighted_probs = raw_probs * weights
+        weight_sum = weighted_probs.sum(dim=-1, keepdim=True)
+        fallback_probs = self._fallback_action_probs(raw_logits, state_gate_valid_mask)
+        normalized = weighted_probs / torch.clamp(weight_sum, min=float(self.config.soft_mask_eps))
+        return torch.where(weight_sum > float(self.config.soft_mask_eps), normalized, fallback_probs)
+
+    def _fallback_action_probs(self, raw_logits: torch.Tensor, state_gate_valid_mask: torch.Tensor) -> torch.Tensor:
+        fallback_logits = raw_logits + self._fallback_action_bias.unsqueeze(0)
+        fallback_probs = torch.softmax(fallback_logits, dim=-1)
+        fallback_weights = state_gate_valid_mask.to(dtype=fallback_probs.dtype)
+        valid_count = fallback_weights.sum(dim=-1, keepdim=True)
+        fallback_weights = torch.where(valid_count > 0.0, fallback_weights, torch.ones_like(fallback_weights))
+        weighted = fallback_probs * fallback_weights
+        return weighted / torch.clamp(weighted.sum(dim=-1, keepdim=True), min=float(self.config.soft_mask_eps))
+
+    def _probs_to_logits(self, probs: torch.Tensor) -> torch.Tensor:
+        zero_logits = torch.full_like(probs, -1e9)
+        min_positive = torch.finfo(probs.dtype).tiny
+        safe_logits = torch.log(torch.clamp(probs, min=min_positive))
+        return torch.where(probs > 0.0, safe_logits, zero_logits)
+
+    def _action_mask_screening_metrics(self, policy_context: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        reference_invalid = ~policy_context["state_gate_valid_mask"]
+        if policy_context["proxy_action_has_safe_prefix"] is not None:
+            reference_invalid = torch.logical_or(reference_invalid, ~policy_context["proxy_action_has_safe_prefix"])
+        predicted_invalid = policy_context["selection_action_mask"] <= float(self.config.soft_mask_eps)
+        reference_invalid_f = reference_invalid.to(dtype=policy_context["raw_probs"].dtype)
+        return {
+            "reference_invalid": reference_invalid,
+            "predicted_invalid": predicted_invalid,
+            "false_negative": torch.logical_and(reference_invalid, ~predicted_invalid),
+            "false_positive": torch.logical_and(~reference_invalid, predicted_invalid),
+            "invalid_prob_before": (policy_context["raw_probs"] * reference_invalid_f).sum(dim=-1),
+            "invalid_prob_after": (policy_context["masked_probs"] * reference_invalid_f).sum(dim=-1),
+        }
+
     def _soft_mask_enabled(self) -> bool:
         return bool(self.config.soft_mask_enabled and self.primitive_library.proxy_sidecar is not None)
 
@@ -327,7 +414,7 @@ class HybridPPOAgent:
         self._proxy_parameter_scales = torch.as_tensor(np.maximum(sidecar.parameter_scales, float(self.config.soft_mask_eps)), dtype=torch.float32, device=self.device)
         self._proxy_valid_mask = torch.as_tensor(sidecar.proxy_valid_mask.astype(np.float32), dtype=torch.float32, device=self.device)
 
-    def _query_proxy_scores(self, observations: torch.Tensor) -> Tuple[np.ndarray, np.ndarray]:
+    def _query_proxy_scores(self, observations: torch.Tensor) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         sidecar = self.primitive_library.proxy_sidecar
         if sidecar is None:
             raise RuntimeError("proxy safety sidecar is required when soft mask is enabled")
@@ -336,6 +423,7 @@ class HybridPPOAgent:
         if observation_np.shape[1] < feature_offset + self._OBSERVED_FEATURE_DIM:
             raise ValueError("observation does not contain enough post-lidar features to reconstruct articulation angle")
         scores = []
+        prefix_lengths = []
         bins = []
         for row in observation_np:
             articulation_angle = float(np.arctan2(row[feature_offset + 6], row[feature_offset + 5]))
@@ -346,16 +434,21 @@ class HybridPPOAgent:
                 eps=float(self.config.soft_mask_eps),
             )
             scores.append(query.proxy_scores)
+            prefix_lengths.append(query.prefix_lengths)
             bins.append(query.articulation_bin_index)
-        return np.stack(scores, axis=0).astype(np.float32), np.asarray(bins, dtype=np.int64)
+        return (
+            np.stack(scores, axis=0).astype(np.float32),
+            np.stack(prefix_lengths, axis=0).astype(np.float32),
+            np.asarray(bins, dtype=np.int64),
+        )
 
-    def _all_action_distribution_moments(self, observations: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _all_action_distribution_moments(self, observations: torch.Tensor, action_mask: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
         means = []
         stds = []
         batch_size = observations.shape[0]
         for action_id in range(self.primitive_library.action_dim):
             action_tensor = torch.full((batch_size,), int(action_id), dtype=torch.int64, device=self.device)
-            dist = self._continuous_dist(observations, action_tensor)
+            dist = self._continuous_dist(observations, action_tensor, action_mask=action_mask)
             means.append(dist.mean)
             stds.append(dist.stddev)
         return torch.stack(means, dim=1), torch.stack(stds, dim=1)
@@ -386,11 +479,27 @@ class HybridPPOAgent:
             masked_logits = masked_logits + all_invalid.to(dtype=masked_logits.dtype).unsqueeze(-1) * self._fallback_action_bias.unsqueeze(0)
         return masked_logits
 
-    def _continuous_safety_terms(self, policy_context: Dict[str, torch.Tensor], action_ids: torch.Tensor, parameters: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _continuous_safety_terms(
+        self,
+        observations: torch.Tensor,
+        policy_context: Dict[str, torch.Tensor],
+        action_ids: torch.Tensor,
+        parameters: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         batch_size = action_ids.shape[0]
         if not self._soft_mask_enabled() or policy_context["proxy_scores"] is None:
             zeros = torch.zeros((batch_size,), dtype=torch.float32, device=self.device)
             return zeros, zeros
+
+        all_action_means = policy_context["all_action_means"]
+        all_action_stds = policy_context["all_action_stds"]
+        if all_action_means is None or all_action_stds is None:
+            all_action_means, all_action_stds = self._all_action_distribution_moments(
+                observations,
+                action_mask=policy_context["network_action_mask"],
+            )
+            policy_context["all_action_means"] = all_action_means
+            policy_context["all_action_stds"] = all_action_stds
 
         batch_indices = torch.arange(batch_size, device=self.device)
         selected_proxy_scores = policy_context["proxy_scores"][batch_indices, action_ids]
@@ -398,8 +507,8 @@ class HybridPPOAgent:
         selected_proxy_scales = self._proxy_parameter_scales[action_ids]
         selected_proxy_valid = self._proxy_valid_mask[action_ids]
         selected_active_mask = self._action_active_mask[action_ids]
-        selected_means = policy_context["all_action_means"][batch_indices, action_ids]
-        selected_stds = policy_context["all_action_stds"][batch_indices, action_ids]
+        selected_means = all_action_means[batch_indices, action_ids]
+        selected_stds = all_action_stds[batch_indices, action_ids]
 
         sampled_similarity = self._proxy_parameter_similarity(
             parameter_values=parameters,

@@ -3,6 +3,7 @@ import torch
 
 from common.config import HybridPPOConfig
 from common.types import MacroTransition
+from model import HybridPolicyNetwork
 from model.agent import HybridPPOAgent
 from primitives import ProxySafetySidecar, SemanticPrimitive, build_default_primitive_library
 
@@ -100,6 +101,29 @@ def test_hybrid_agent_action_and_update_smoke():
     assert "value_loss" in metrics
 
 
+def test_hybrid_policy_network_responds_to_action_mask_input():
+    torch.manual_seed(7)
+    policy = HybridPolicyNetwork(
+        observation_dim=6,
+        action_dim=4,
+        parameter_dim=3,
+        hidden_dim=16,
+        action_embedding_dim=8,
+    )
+    observation = torch.zeros((1, 6), dtype=torch.float32)
+    action_ids = torch.tensor([2], dtype=torch.int64)
+    mask_a = torch.zeros((1, 4), dtype=torch.float32)
+    mask_b = torch.tensor([[1.0, 0.3, 0.8, 0.5]], dtype=torch.float32)
+
+    logits_a = policy.discrete_logits(observation, action_mask=mask_a)
+    logits_b = policy.discrete_logits(observation, action_mask=mask_b)
+    continuous_a = policy.continuous_raw(observation, action_ids, action_mask=mask_a)
+    continuous_b = policy.continuous_raw(observation, action_ids, action_mask=mask_b)
+
+    assert not torch.allclose(logits_a, logits_b)
+    assert not torch.allclose(continuous_a, continuous_b)
+
+
 def test_distribution_aware_semantic_scores_do_not_reduce_by_proxy_max():
     library = build_default_primitive_library(proxy_sidecar=_make_proxy_sidecar(build_default_primitive_library()))
     config = HybridPPOConfig(
@@ -126,6 +150,28 @@ def test_distribution_aware_semantic_scores_do_not_reduce_by_proxy_max():
     )
 
     assert float(semantic_scores[0, 0].item()) < float(semantic_scores[0, 1].item())
+
+
+def test_reweighted_action_probs_match_manual_soft_mask_formula():
+    library = build_default_primitive_library()
+    config = HybridPPOConfig(
+        observation_dim=10,
+        action_dim=library.action_dim,
+        parameter_dim=library.parameter_dim,
+        soft_mask_logit_scale=1.0,
+    )
+    agent = HybridPPOAgent(config, library)
+    raw_logits = torch.tensor([[2.0, 1.0, -1.0, 0.5, -0.2, -0.7, -0.9, -1.1]], dtype=torch.float32, device=agent.device)
+    action_mask = torch.tensor([[1.0, 0.5, 0.0, 0.25, 1.0, 1.0, 1.0, 1.0]], dtype=torch.float32, device=agent.device)
+    state_gate = torch.ones_like(raw_logits, dtype=torch.bool, device=agent.device)
+
+    probs = agent._reweighted_action_probs(raw_logits, action_mask, state_gate)
+    manual = torch.softmax(raw_logits, dim=-1) * action_mask
+    manual = manual / manual.sum(dim=-1, keepdim=True)
+
+    assert torch.allclose(probs, manual)
+    assert float(probs[0, 0].item()) > float(probs[0, 1].item())
+    assert float(probs[0, 1].item()) > float(probs[0, 2].item())
 
 
 def test_hybrid_agent_soft_mask_keeps_act_and_evaluate_consistent():
@@ -160,6 +206,32 @@ def test_hybrid_agent_soft_mask_keeps_act_and_evaluate_consistent():
     assert 0.0 <= float(sampled_safety_score.item()) <= 1.0
 
 
+def test_action_mask_screening_metrics_have_no_leak_or_false_block_on_proxy_invalid_actions():
+    base_library = build_default_primitive_library()
+    library = build_default_primitive_library(proxy_sidecar=_make_proxy_sidecar(base_library))
+    config = HybridPPOConfig(
+        observation_dim=13,
+        action_dim=library.action_dim,
+        parameter_dim=library.parameter_dim,
+        soft_mask_enabled=True,
+    )
+    agent = HybridPPOAgent(config, library)
+    with torch.no_grad():
+        agent.policy.discrete_head.weight.zero_()
+        agent.policy.discrete_head.bias.zero_()
+
+    observation = np.zeros((13,), dtype=np.float32)
+    observation[:4] = 0.5
+    observation[9] = 1.0
+    context = agent._masked_policy_context(agent._obs_tensor(observation))
+    metrics = agent._action_mask_screening_metrics(context)
+
+    assert not torch.any(metrics["false_negative"])
+    assert not torch.any(metrics["false_positive"])
+    assert float(metrics["invalid_prob_before"].item()) > 0.0
+    assert float(metrics["invalid_prob_after"].item()) == 0.0
+
+
 def test_continuous_safety_loss_does_not_modify_ppo_log_prob():
     base_library = build_default_primitive_library()
     library = build_default_primitive_library(proxy_sidecar=_make_proxy_sidecar(base_library))
@@ -183,8 +255,8 @@ def test_continuous_safety_loss_does_not_modify_ppo_log_prob():
     action_tensor = torch.as_tensor([selection.macro_action.primitive_id], dtype=torch.int64, device=agent.device)
     parameter_tensor = torch.as_tensor(selection.macro_action.parameters.reshape(1, -1), dtype=torch.float32, device=agent.device)
     context = agent._masked_policy_context(obs_tensor)
-    discrete_dist = torch.distributions.Categorical(logits=context["masked_logits"])
-    continuous_dist = agent._continuous_dist(obs_tensor, action_tensor)
+    discrete_dist = torch.distributions.Categorical(probs=context["masked_probs"])
+    continuous_dist = agent._continuous_dist(obs_tensor, action_tensor, action_mask=context["network_action_mask"])
     active_mask = agent._active_mask_tensor(action_tensor)
     manual_total = discrete_dist.log_prob(action_tensor) + continuous_dist.masked_log_prob(parameter_tensor, active_mask)
 
