@@ -15,6 +15,7 @@ def _make_observation(
     articulation: float = 0.0,
     speed: float = 0.0,
     articulation_rate: float = 0.0,
+    guidance_features=None,
 ) -> np.ndarray:
     lidar = np.asarray(lidar_values, dtype=np.float32).reshape(-1)
     features = np.array(
@@ -31,7 +32,10 @@ def _make_observation(
         ],
         dtype=np.float32,
     )
-    return np.concatenate([lidar, features], axis=0)
+    guidance = np.zeros((0,), dtype=np.float32)
+    if guidance_features is not None:
+        guidance = np.asarray(guidance_features, dtype=np.float32).reshape(-1)
+    return np.concatenate([lidar, features, guidance], axis=0)
 
 
 def _make_proxy_sidecar(library, lidar_rays: int = 4) -> ProxySafetySidecar:
@@ -255,6 +259,35 @@ def test_state_gate_allows_articulation_recover_when_articulation_is_large():
     selection = agent.act(observation, deterministic=True)
 
     assert selection.macro_action.primitive_id == recover_id
+
+
+def test_state_gate_reads_base_features_when_guidance_is_appended():
+    base_library = build_default_primitive_library()
+    library = build_default_primitive_library(proxy_sidecar=_make_proxy_sidecar(base_library))
+    config = HybridPPOConfig(
+        observation_dim=17,
+        action_dim=library.action_dim,
+        parameter_dim=library.parameter_dim,
+        soft_mask_enabled=True,
+    )
+    agent = HybridPPOAgent(config, library)
+    recover_id = int(library.spec(SemanticPrimitive.ARTICULATION_RECOVER).primitive_id)
+    forward_id = int(library.spec(SemanticPrimitive.FORWARD_LEFT).primitive_id)
+    with torch.no_grad():
+        agent.policy.discrete_head.weight.zero_()
+        agent.policy.discrete_head.bias.zero_()
+        agent.policy.discrete_head.bias[recover_id] = 5.0
+        agent.policy.discrete_head.bias[forward_id] = 1.0
+
+    observation = _make_observation(
+        [1.0, 1.0, 1.0, 1.0],
+        goal_distance=0.5,
+        articulation=0.1,
+        guidance_features=[0.0, 1.0, 0.0, 0.95],
+    )
+    selection = agent.act(observation, deterministic=True)
+
+    assert selection.macro_action.primitive_id == forward_id
 
 
 def test_state_gate_blocks_stop_check_far_from_goal():

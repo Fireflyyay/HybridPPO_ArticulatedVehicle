@@ -17,7 +17,7 @@ def test_macro_rollout_driver_collects_episode_summary():
     library = build_default_primitive_library()
     agent = HybridPPOAgent(
         config=__import__("common.config", fromlist=["HybridPPOConfig"]).HybridPPOConfig(
-            observation_dim=17,
+            observation_dim=env.observation_dim,
             action_dim=library.action_dim,
             parameter_dim=library.parameter_dim,
             mini_batch_size=2,

@@ -8,6 +8,7 @@ from torch import nn
 from torch.distributions import Categorical
 
 from common.config import HybridPPOConfig
+from common.runtime_config import BASE_OBSERVATION_FEATURE_DIM, GUIDANCE_FEATURE_DIM
 from common.types import MacroAction, MacroTransition
 from primitives.library import ParameterizedPrimitiveLibrary, SemanticPrimitive
 from ..buffer import SMDPBatch, SMDPRolloutBuffer
@@ -26,7 +27,7 @@ class ActionSelection:
 
 
 class HybridPPOAgent:
-    _OBSERVED_FEATURE_DIM = 9
+    _OBSERVED_FEATURE_DIM = int(BASE_OBSERVATION_FEATURE_DIM)
     _RECOVER_ENTER_ARTICULATION_RAD = float(np.deg2rad(24.0))
     _STOP_CHECK_GOAL_DISTANCE_NORM = 0.08
     _STOP_CHECK_HEADING_ERROR_RAD = float(np.deg2rad(12.0))
@@ -257,14 +258,24 @@ class HybridPPOAgent:
     def _action_ids_for_semantic(self, semantic: SemanticPrimitive) -> Tuple[int, ...]:
         return tuple(int(spec.primitive_id) for spec in self.primitive_library.specs if spec.semantic == semantic)
 
+    def _base_feature_offset(self, observations: torch.Tensor) -> int:
+        sidecar = self.primitive_library.proxy_sidecar
+        if sidecar is not None:
+            return int(sidecar.num_rays)
+
+        appended_guidance_offset = observations.shape[1] - self._OBSERVED_FEATURE_DIM - int(GUIDANCE_FEATURE_DIM)
+        if appended_guidance_offset >= 4:
+            return int(appended_guidance_offset)
+        return int(observations.shape[1] - self._OBSERVED_FEATURE_DIM)
+
     def _state_gate_valid_mask(self, observations: torch.Tensor) -> torch.Tensor:
         batch_size = observations.shape[0]
         valid_mask = torch.ones((batch_size, self.primitive_library.action_dim), dtype=torch.bool, device=self.device)
-        feature_offset = observations.shape[1] - self._OBSERVED_FEATURE_DIM
-        if feature_offset < 0:
+        feature_offset = self._base_feature_offset(observations)
+        if feature_offset < 0 or observations.shape[1] < feature_offset + self._OBSERVED_FEATURE_DIM:
             return valid_mask
 
-        features = observations[:, feature_offset:]
+        features = observations[:, feature_offset : feature_offset + self._OBSERVED_FEATURE_DIM]
         goal_distance = torch.clamp(features[:, 0], min=0.0)
         relative_heading = torch.atan2(features[:, 4], features[:, 3])
         articulation = torch.atan2(features[:, 6], features[:, 5])
@@ -321,8 +332,8 @@ class HybridPPOAgent:
         if sidecar is None:
             raise RuntimeError("proxy safety sidecar is required when soft mask is enabled")
         observation_np = observations.detach().cpu().numpy()
-        feature_offset = int(sidecar.num_rays)
-        if observation_np.shape[1] < feature_offset + 7:
+        feature_offset = self._base_feature_offset(observations)
+        if observation_np.shape[1] < feature_offset + self._OBSERVED_FEATURE_DIM:
             raise ValueError("observation does not contain enough post-lidar features to reconstruct articulation angle")
         scores = []
         bins = []

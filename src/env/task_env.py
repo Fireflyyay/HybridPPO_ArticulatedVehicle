@@ -6,9 +6,10 @@ from shapely.geometry import box
 from shapely.ops import unary_union
 
 from common.config import VehicleConfig
-from common.runtime_config import EnvRuntimeConfig, ObservationConfig, RewardConfig
+from common.runtime_config import EnvRuntimeConfig, GUIDANCE_FEATURE_DIM, ObservationConfig, RewardConfig
 from common.types import ArticulatedState, LowLevelControl, PrimitiveExecutionContext, wrap_to_pi
 from env.dynamics import ArticulatedKinematics
+from env.global_guidance import CoarseGlobalGuidance
 from env.scenes import BaselineInspiredSceneFactory, SceneSpec
 from env.success import ParkingSuccessChecker, articulated_body_polygons
 
@@ -57,6 +58,8 @@ class KinematicTaskEnv:
         self._obstacle_segment_dy = np.empty((0,), dtype=np.float64)
         self._step_count = 0
         self._last_info: Dict[str, object] = {}
+        self._global_guidance = CoarseGlobalGuidance()
+        self._guidance_available = False
 
     @property
     def observation_dim(self) -> int:
@@ -73,6 +76,12 @@ class KinematicTaskEnv:
         self._cache_obstacle_segments()
         xmin, xmax, ymin, ymax = self._scene.world_bounds
         self._world_box = box(xmin, ymin, xmax, ymax)
+        self._guidance_available = self._global_guidance.plan_scene_path(
+            scene=self._scene,
+            vehicle_config=self.vehicle_config,
+            start_xy=(float(self._state.x), float(self._state.y)),
+            goal_xy=(float(self._goal_state.x), float(self._goal_state.y)),
+        )
         self._step_count = 0
         self._last_info = self._build_info(
             collision=False,
@@ -170,7 +179,8 @@ class KinematicTaskEnv:
             ],
             dtype=np.float32,
         )
-        return np.concatenate([lidar, features], axis=0).astype(np.float32)
+        guidance = self._guidance_observation(lidar)
+        return np.concatenate([lidar, features, guidance], axis=0).astype(np.float32)
 
     def get_articulated_state(self) -> ArticulatedState:
         if self._state is None:
@@ -260,6 +270,8 @@ class KinematicTaskEnv:
             "reward_info": dict(reward_info),
             "level": None if self._scene is None else str(self._scene.level),
             "step_count": int(self._step_count),
+            "guidance_available": bool(self._guidance_available),
+            "guidance_path_confidence": float(self._global_guidance.path_confidence),
         }
         if success_metrics is not None:
             info.update(
@@ -271,6 +283,20 @@ class KinematicTaskEnv:
                 }
             )
         return info
+
+    def _guidance_observation(self, lidar: np.ndarray) -> np.ndarray:
+        if self._state is None:
+            raise RuntimeError("environment must be reset before observation generation")
+        if not self._guidance_available:
+            return np.zeros((GUIDANCE_FEATURE_DIM,), dtype=np.float32)
+        return self._global_guidance.get_soft_hint(
+            state_x=float(self._state.x),
+            state_y=float(self._state.y),
+            heading=float(self._state.front_heading),
+            speed=float(self._state.speed),
+            lidar_norm=np.asarray(lidar, dtype=np.float32),
+            lidar_range=float(self.observation_config.lidar_max_range),
+        )
 
     def _lidar_observation(self, state: ArticulatedState) -> np.ndarray:
         beam_count = int(self.observation_config.lidar_num_beams)

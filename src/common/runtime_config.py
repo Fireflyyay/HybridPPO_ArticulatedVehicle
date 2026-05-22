@@ -6,6 +6,10 @@ import numpy as np
 from .config import HybridPPOConfig, PrimitiveExecutorConfig, VehicleConfig
 
 
+BASE_OBSERVATION_FEATURE_DIM = 9
+GUIDANCE_FEATURE_DIM = 4
+
+
 @dataclass(frozen=True)
 class ObservationConfig:
     lidar_num_beams: int = 108
@@ -14,7 +18,7 @@ class ObservationConfig:
 
     @property
     def observation_dim(self) -> int:
-        return int(self.lidar_num_beams + 9)
+        return int(self.lidar_num_beams + BASE_OBSERVATION_FEATURE_DIM + GUIDANCE_FEATURE_DIM)
 
 
 @dataclass(frozen=True)

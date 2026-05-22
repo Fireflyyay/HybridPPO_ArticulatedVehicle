@@ -293,6 +293,7 @@ class BaselineInspiredSceneFactory:
                 goal_state=ArticulatedState(goal.x, goal.y, goal.heading, goal.heading),
                 metadata={
                     "scene_type": "block_mixing_plant",
+                    "corridor_width": float(corridor_width),
                     "free_shape_count": len(free_shapes),
                     "valid_candidate_count": len(valid_candidates),
                     "aligned_to": "ppo_articulated_vehicle",
