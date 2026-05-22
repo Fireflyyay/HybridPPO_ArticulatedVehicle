@@ -4,7 +4,34 @@ import torch
 from common.config import HybridPPOConfig
 from common.types import MacroTransition
 from model.agent import HybridPPOAgent
-from primitives import ProxySafetySidecar, build_default_primitive_library
+from primitives import ProxySafetySidecar, SemanticPrimitive, build_default_primitive_library
+
+
+def _make_observation(
+    lidar_values,
+    goal_distance: float,
+    relative_angle: float = 0.0,
+    relative_heading: float = 0.0,
+    articulation: float = 0.0,
+    speed: float = 0.0,
+    articulation_rate: float = 0.0,
+) -> np.ndarray:
+    lidar = np.asarray(lidar_values, dtype=np.float32).reshape(-1)
+    features = np.array(
+        [
+            goal_distance,
+            np.cos(relative_angle),
+            np.sin(relative_angle),
+            np.cos(relative_heading),
+            np.sin(relative_heading),
+            np.cos(articulation),
+            np.sin(articulation),
+            speed,
+            articulation_rate,
+        ],
+        dtype=np.float32,
+    )
+    return np.concatenate([lidar, features], axis=0)
 
 
 def _make_proxy_sidecar(library, lidar_rays: int = 4) -> ProxySafetySidecar:
@@ -182,3 +209,95 @@ def test_soft_mask_defaults_keep_low_scored_actions_available():
 
     assert low_action_prob >= 0.05
     assert best_action_prob <= 0.5
+
+
+def test_state_gate_blocks_articulation_recover_when_articulation_is_small():
+    library = build_default_primitive_library()
+    config = HybridPPOConfig(
+        observation_dim=13,
+        action_dim=library.action_dim,
+        parameter_dim=library.parameter_dim,
+    )
+    agent = HybridPPOAgent(config, library)
+    recover_id = int(library.spec(SemanticPrimitive.ARTICULATION_RECOVER).primitive_id)
+    forward_id = int(library.spec(SemanticPrimitive.FORWARD_LEFT).primitive_id)
+    with torch.no_grad():
+        agent.policy.discrete_head.weight.zero_()
+        agent.policy.discrete_head.bias.zero_()
+        agent.policy.discrete_head.bias[recover_id] = 5.0
+        agent.policy.discrete_head.bias[forward_id] = 1.0
+
+    observation = _make_observation([1.0, 1.0, 1.0, 1.0], goal_distance=0.5, articulation=0.1)
+    selection = agent.act(observation, deterministic=True)
+    context = agent._masked_policy_context(agent._obs_tensor(observation))
+
+    assert selection.macro_action.primitive_id == forward_id
+    assert float(context["masked_logits"][0, recover_id].item()) < -1e8
+
+
+def test_state_gate_allows_articulation_recover_when_articulation_is_large():
+    library = build_default_primitive_library()
+    config = HybridPPOConfig(
+        observation_dim=13,
+        action_dim=library.action_dim,
+        parameter_dim=library.parameter_dim,
+    )
+    agent = HybridPPOAgent(config, library)
+    recover_id = int(library.spec(SemanticPrimitive.ARTICULATION_RECOVER).primitive_id)
+    forward_id = int(library.spec(SemanticPrimitive.FORWARD_LEFT).primitive_id)
+    with torch.no_grad():
+        agent.policy.discrete_head.weight.zero_()
+        agent.policy.discrete_head.bias.zero_()
+        agent.policy.discrete_head.bias[recover_id] = 5.0
+        agent.policy.discrete_head.bias[forward_id] = 1.0
+
+    observation = _make_observation([1.0, 1.0, 1.0, 1.0], goal_distance=0.5, articulation=0.5)
+    selection = agent.act(observation, deterministic=True)
+
+    assert selection.macro_action.primitive_id == recover_id
+
+
+def test_state_gate_blocks_stop_check_far_from_goal():
+    library = build_default_primitive_library()
+    config = HybridPPOConfig(
+        observation_dim=13,
+        action_dim=library.action_dim,
+        parameter_dim=library.parameter_dim,
+    )
+    agent = HybridPPOAgent(config, library)
+    stop_id = int(library.spec(SemanticPrimitive.STOP_CHECK).primitive_id)
+    forward_id = int(library.spec(SemanticPrimitive.FORWARD_LEFT).primitive_id)
+    with torch.no_grad():
+        agent.policy.discrete_head.weight.zero_()
+        agent.policy.discrete_head.bias.zero_()
+        agent.policy.discrete_head.bias[stop_id] = 5.0
+        agent.policy.discrete_head.bias[forward_id] = 1.0
+
+    observation = _make_observation([0.7, 0.8, 0.9, 1.0], goal_distance=0.5, relative_heading=0.0)
+    selection = agent.act(observation, deterministic=True)
+    context = agent._masked_policy_context(agent._obs_tensor(observation))
+
+    assert selection.macro_action.primitive_id == forward_id
+    assert float(context["masked_logits"][0, stop_id].item()) < -1e8
+
+
+def test_state_gate_allows_stop_check_near_goal_in_tight_space():
+    library = build_default_primitive_library()
+    config = HybridPPOConfig(
+        observation_dim=13,
+        action_dim=library.action_dim,
+        parameter_dim=library.parameter_dim,
+    )
+    agent = HybridPPOAgent(config, library)
+    stop_id = int(library.spec(SemanticPrimitive.STOP_CHECK).primitive_id)
+    forward_id = int(library.spec(SemanticPrimitive.FORWARD_LEFT).primitive_id)
+    with torch.no_grad():
+        agent.policy.discrete_head.weight.zero_()
+        agent.policy.discrete_head.bias.zero_()
+        agent.policy.discrete_head.bias[stop_id] = 5.0
+        agent.policy.discrete_head.bias[forward_id] = 1.0
+
+    observation = _make_observation([0.03, 0.04, 0.05, 0.06], goal_distance=0.04, relative_heading=0.05)
+    selection = agent.act(observation, deterministic=True)
+
+    assert selection.macro_action.primitive_id == stop_id

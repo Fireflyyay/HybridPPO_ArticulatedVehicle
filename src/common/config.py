@@ -52,7 +52,7 @@ class HybridPPOConfig:
     mini_batch_size: int = 64
     update_epochs: int = 10
     std_floor: float = 0.05
-    soft_mask_enabled: bool = False
+    soft_mask_enabled: bool = True
     soft_mask_gamma: float = 1.0
     soft_mask_eps: float = 1e-4
     soft_mask_logit_scale: float = 1.0

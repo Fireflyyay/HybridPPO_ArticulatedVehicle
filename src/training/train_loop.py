@@ -79,12 +79,14 @@ class ExperimentTrainer:
         pending_episodes = 0
         try:
             for episode_idx in range(int(self.start_episode), int(self.config.schedule.total_episodes)):
-                level = self.config.schedule.level_for_episode(episode_idx)
+                reset_options = self.config.schedule.reset_options_for_episode(episode_idx)
+                level = str(reset_options["level"])
                 summary = self.rollout_driver.collect_episode(
                     level=level,
                     seed=int(self.config.seed + episode_idx),
                     deterministic=False,
                     store_transition=True,
+                    reset_options=reset_options,
                 )
                 pending_episodes += 1
                 self.logger.log_training_episode(

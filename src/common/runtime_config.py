@@ -1,5 +1,5 @@
 from dataclasses import asdict, dataclass, field
-from typing import Dict, Mapping, Tuple
+from typing import Dict, Mapping, Optional, Tuple
 
 import numpy as np
 
@@ -19,14 +19,14 @@ class ObservationConfig:
 
 @dataclass(frozen=True)
 class RewardConfig:
-    progress_weight: float = 10.0
-    heading_weight: float = 0.5
-    overlap_weight: float = 10.0
+    progress_weight: float = 8.0
+    heading_weight: float = 0.8
+    overlap_weight: float = 14.0
     step_penalty: float = -0.05
-    success_reward: float = 25.0
+    success_reward: float = 35.0
     collision_penalty: float = -25.0
     out_of_bounds_penalty: float = -25.0
-    timeout_penalty: float = -15.0
+    timeout_penalty: float = -10.0
 
 
 @dataclass(frozen=True)
@@ -49,6 +49,18 @@ class SceneLevelConfig:
     parking_bay_length_range: Tuple[int, int] = (6, 8)
     parking_bay_depth_range: Tuple[int, int] = (8, 12)
     parking_head_wall_clearance: float = 1.0
+    warmup_corridor_max_width: float = 6.0
+
+    def warmup_corridor_min_width(self) -> float:
+        return float(min(self.corridor_width_range[0], self.corridor_width_range[1]))
+
+    def resolve_warmup_corridor_width(self, progress: Optional[float] = None) -> float:
+        min_width = float(self.warmup_corridor_min_width())
+        max_width = max(min_width, float(self.warmup_corridor_max_width))
+        if progress is None:
+            return min_width
+        clamped_progress = float(np.clip(float(progress), 0.0, 1.0))
+        return float(max(min_width, max_width - (max_width - min_width) * clamped_progress))
 
 
 def build_scene_presets() -> Dict[str, SceneLevelConfig]:
@@ -64,6 +76,7 @@ def build_scene_presets() -> Dict[str, SceneLevelConfig]:
             pair_distance_range=(6.0, 30.0),
             pair_heading_diff_range_deg=(0.0, 120.0),
             corridor_width_range=(6, 6),
+            warmup_corridor_max_width=16.0,
             branch_count_range=(0, 0),
             parking_bay_count_range=(1, 1),
             parking_bay_length_range=(6, 8),
@@ -104,17 +117,17 @@ class HybridPPOHyperConfig:
     gae_lambda: float = 0.95
     clip_epsilon: float = 0.2
     value_coef: float = 0.5
-    entropy_coef_discrete: float = 0.01
-    entropy_coef_continuous: float = 0.001
+    entropy_coef_discrete: float = 0.020
+    entropy_coef_continuous: float = 0.008
     max_grad_norm: float = 0.5
     mini_batch_size: int = 1024
     update_epochs: int = 10
-    std_floor: float = 0.05
-    soft_mask_enabled: bool = False
+    std_floor: float = 0.08
+    soft_mask_enabled: bool = True
     soft_mask_gamma: float = 1.0
     soft_mask_eps: float = 1e-4
-    soft_mask_logit_scale: float = 1.0
-    soft_mask_floor: float = 0.2
+    soft_mask_logit_scale: float = 0.8
+    soft_mask_floor: float = 0.1
     soft_mask_temperature: float = 1.0
     soft_mask_fallback_bonus: float = 1.5
     continuous_safety_temperature: float = 1.0
@@ -153,17 +166,18 @@ class HybridPPOHyperConfig:
 
 @dataclass(frozen=True)
 class ProxySafetyConfig:
-    sidecar_path: str = ""
+    sidecar_path: str = "/home/cyberbus/Public/HybridPPO_ArticulatedVehicle/data/proxy_safety_sidecar.npz"
 
 
 @dataclass(frozen=True)
 class TrainingScheduleConfig:
-    total_episodes: int = 10000
+    total_episodes: int = 35000
     episodes_per_update: int = 128
     max_macro_steps_per_episode: int = 64
-    debug_phase_episodes: int = 1000
+    debug_phase_episodes: int = 0
     warmup_level: str = "Warmup"
-    warmup_episodes: int = 2000
+    warmup_episodes: int = 10000
+    warmup_corridor_convergence_episodes: int = 8000
     default_train_level: str = "Normal"
     debug_level: str = "Debug"
 
@@ -173,6 +187,30 @@ class TrainingScheduleConfig:
         if int(episode_idx) < int(self.debug_phase_episodes) + int(self.warmup_episodes):
             return str(self.warmup_level)
         return str(self.default_train_level)
+
+    def warmup_episode_index(self, episode_idx: int) -> Optional[int]:
+        warmup_start = int(self.debug_phase_episodes)
+        warmup_end = warmup_start + int(self.warmup_episodes)
+        if int(episode_idx) < warmup_start or int(episode_idx) >= warmup_end:
+            return None
+        return int(episode_idx) - warmup_start
+
+    def warmup_corridor_progress(self, episode_idx: int) -> Optional[float]:
+        warmup_episode_idx = self.warmup_episode_index(episode_idx)
+        if warmup_episode_idx is None:
+            return None
+        convergence_episodes = max(1, int(self.warmup_corridor_convergence_episodes))
+        return float(min(1.0, max(0.0, warmup_episode_idx / convergence_episodes)))
+
+    def reset_options_for_episode(self, episode_idx: int) -> Dict[str, object]:
+        level = self.level_for_episode(episode_idx)
+        options: Dict[str, object] = {"level": str(level)}
+        warmup_episode_idx = self.warmup_episode_index(episode_idx)
+        if warmup_episode_idx is None:
+            return options
+        options["warmup_episode_idx"] = int(warmup_episode_idx)
+        options["warmup_progress"] = float(self.warmup_corridor_progress(episode_idx) or 0.0)
+        return options
 
 
 @dataclass(frozen=True)

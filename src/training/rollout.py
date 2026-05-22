@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, Mapping, Optional
 
 import numpy as np
 
@@ -42,8 +42,13 @@ class MacroRolloutDriver:
         seed: Optional[int] = None,
         deterministic: bool = False,
         store_transition: bool = True,
+        reset_options: Optional[Mapping[str, object]] = None,
     ) -> EpisodeSummary:
-        observation, _ = self.env.reset(seed=seed, options={"level": str(level)})
+        options = {"level": str(level)}
+        if reset_options is not None:
+            options.update(dict(reset_options))
+            options["level"] = str(level)
+        observation, _ = self.env.reset(seed=seed, options=options)
         observation = np.asarray(observation, dtype=np.float32)
         total_reward = 0.0
         macro_steps = 0

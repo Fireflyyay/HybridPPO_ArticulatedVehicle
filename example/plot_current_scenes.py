@@ -1,7 +1,7 @@
 import argparse
 import os
 import sys
-from typing import Iterable, List, Sequence, Tuple
+from typing import Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -36,6 +36,12 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Optional output image path. If omitted, the figure is shown interactively.",
     )
+    parser.add_argument(
+        "--warmup-progress",
+        type=float,
+        default=None,
+        help="Optional Warmup curriculum progress in [0, 1]. Only applied when rendering Warmup.",
+    )
     return parser.parse_args()
 
 
@@ -43,10 +49,13 @@ def _scene_levels(level: str) -> List[str]:
     return [str(level)] if str(level) != "All" else ["Debug", "Warmup", "Normal"]
 
 
-def _build_scene(level: str, seed: int) -> Tuple[SceneSpec, ExperimentConfig]:
+def _build_scene(level: str, seed: int, warmup_progress: Optional[float] = None) -> Tuple[SceneSpec, ExperimentConfig]:
     config = ExperimentConfig()
     scene_factory = BaselineInspiredSceneFactory(config.env.scene_presets, vehicle_config=config.vehicle)
-    scene = scene_factory.generate(str(level), np.random.default_rng(int(seed)))
+    options = None
+    if str(level) == "Warmup" and warmup_progress is not None:
+        options = {"warmup_progress": float(warmup_progress)}
+    scene = scene_factory.generate(str(level), np.random.default_rng(int(seed)), options=options)
     return scene, config
 
 
@@ -137,11 +146,11 @@ def _legend_handles() -> List[Patch]:
     ]
 
 
-def _create_figure(levels: Iterable[str], seed: int) -> Figure:
+def _create_figure(levels: Iterable[str], seed: int, warmup_progress: Optional[float] = None) -> Figure:
     level_list = list(levels)
     figure, axes = plt.subplots(1, len(level_list), figsize=(7.0 * len(level_list), 7.0), squeeze=False)
     for axis, level in zip(axes[0], level_list):
-        scene, config = _build_scene(level, seed)
+        scene, config = _build_scene(level, seed, warmup_progress=warmup_progress)
         scene.metadata.setdefault("seed", int(seed))
         _render_scene(axis, scene, config)
     figure.legend(handles=_legend_handles(), loc="upper right")
@@ -152,7 +161,11 @@ def _create_figure(levels: Iterable[str], seed: int) -> Figure:
 
 def main() -> None:
     args = _parse_args()
-    figure = _create_figure(_scene_levels(str(args.level)), int(args.seed))
+    figure = _create_figure(
+        _scene_levels(str(args.level)),
+        int(args.seed),
+        warmup_progress=None if args.warmup_progress is None else float(args.warmup_progress),
+    )
     if args.output:
         output_path = os.path.abspath(str(args.output))
         output_dir = os.path.dirname(output_path)

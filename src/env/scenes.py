@@ -69,6 +69,12 @@ def _sample_distance(rng: np.random.Generator, low_high: Tuple[float, float]) ->
     return float(rng.uniform(low, high))
 
 
+def _warmup_progress(options: Optional[Mapping[str, object]]) -> Optional[float]:
+    if not options or "warmup_progress" not in options:
+        return None
+    return float(options["warmup_progress"])
+
+
 class BaselineInspiredSceneFactory:
     def __init__(
         self,
@@ -106,7 +112,12 @@ class BaselineInspiredSceneFactory:
             valid.append(candidate)
         return tuple(valid)
 
-    def generate(self, level: str, rng: np.random.Generator) -> SceneSpec:
+    def generate(
+        self,
+        level: str,
+        rng: np.random.Generator,
+        options: Optional[Mapping[str, object]] = None,
+    ) -> SceneSpec:
         level_name = str(level)
         if level_name not in self.presets:
             raise KeyError(f"unknown level: {level_name}")
@@ -114,7 +125,7 @@ class BaselineInspiredSceneFactory:
         if level_name == "Debug":
             return self._generate_debug(level_name, config, rng)
         if level_name == "Warmup":
-            return self._generate_warmup(level_name, config, rng)
+            return self._generate_warmup(level_name, config, rng, options=options)
         return self._generate_block_mixing(level_name, config, rng)
 
     def _generate_debug(self, level: str, config: SceneLevelConfig, rng: np.random.Generator) -> SceneSpec:
@@ -144,9 +155,18 @@ class BaselineInspiredSceneFactory:
             )
         raise RuntimeError("failed to sample debug scene")
 
-    def _generate_warmup(self, level: str, config: SceneLevelConfig, rng: np.random.Generator) -> SceneSpec:
-        corridor = box(-30.0, -3.0, 14.0, 3.0)
-        bay = box(8.0, 3.0, 20.0, 15.0)
+    def _generate_warmup(
+        self,
+        level: str,
+        config: SceneLevelConfig,
+        rng: np.random.Generator,
+        options: Optional[Mapping[str, object]] = None,
+    ) -> SceneSpec:
+        corridor_width = float(config.resolve_warmup_corridor_width(_warmup_progress(options)))
+        half_width = 0.5 * corridor_width
+        bay_depth = 12.0
+        corridor = box(-30.0, -half_width, 14.0, half_width)
+        bay = box(8.0, half_width, 20.0, half_width + bay_depth)
         free_space = unary_union([corridor, bay]).buffer(0)
         world = box(config.world_min, config.world_min, config.world_max, config.world_max)
         obstacles = tuple(_extract_polygons(world.difference(free_space).buffer(0)))
@@ -154,7 +174,7 @@ class BaselineInspiredSceneFactory:
         start_state = ArticulatedState(x=-12.0, y=0.0, front_heading=0.0, rear_heading=0.0)
         goal_state = ArticulatedState(
             x=14.0,
-            y=15.0 - head_clearance - self._front_reach(),
+            y=half_width + bay_depth - head_clearance - self._front_reach(),
             front_heading=float(np.pi / 2.0),
             rear_heading=float(np.pi / 2.0),
         )
@@ -183,7 +203,13 @@ class BaselineInspiredSceneFactory:
                 obstacles=transformed_obstacles,
                 start_state=transformed_start,
                 goal_state=transformed_goal,
-                metadata={"scene_type": "warmup_bay", "aligned_to": "ppo_articulated_vehicle"},
+                metadata={
+                    "scene_type": "warmup_bay",
+                    "aligned_to": "ppo_articulated_vehicle",
+                    "corridor_width": float(corridor_width),
+                    "corridor_min_width": float(config.warmup_corridor_min_width()),
+                    "warmup_progress": _warmup_progress(options),
+                },
             )
         raise RuntimeError("failed to sample warmup scene")
 

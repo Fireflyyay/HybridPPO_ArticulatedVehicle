@@ -26,6 +26,12 @@ class ActionSelection:
 
 
 class HybridPPOAgent:
+    _OBSERVED_FEATURE_DIM = 9
+    _RECOVER_ENTER_ARTICULATION_RAD = float(np.deg2rad(24.0))
+    _STOP_CHECK_GOAL_DISTANCE_NORM = 0.08
+    _STOP_CHECK_HEADING_ERROR_RAD = float(np.deg2rad(12.0))
+    _STOP_CHECK_MIN_CLEARANCE_NORM = 0.10
+
     def __init__(self, config: HybridPPOConfig, primitive_library: ParameterizedPrimitiveLibrary, device: Optional[torch.device] = None) -> None:
         self.config = config
         self.primitive_library = primitive_library
@@ -49,6 +55,8 @@ class HybridPPOAgent:
             device=self.device,
         )
         self._fallback_action_bias = self._build_fallback_action_bias()
+        self._recover_action_ids = self._action_ids_for_semantic(SemanticPrimitive.ARTICULATION_RECOVER)
+        self._stop_action_ids = self._action_ids_for_semantic(SemanticPrimitive.STOP_CHECK)
         self._proxy_cache_token = None
         self._proxy_parameter_centers = None
         self._proxy_parameter_scales = None
@@ -209,10 +217,12 @@ class HybridPPOAgent:
 
     def _masked_policy_context(self, observations: torch.Tensor) -> Dict[str, torch.Tensor]:
         raw_logits = self.policy.discrete_logits(observations)
+        state_gate_valid_mask = self._state_gate_valid_mask(observations)
         context = {
             "raw_logits": raw_logits,
-            "masked_logits": raw_logits,
+            "masked_logits": self._apply_state_gate_mask(raw_logits, state_gate_valid_mask),
             "semantic_scores": torch.ones_like(raw_logits),
+            "state_gate_valid_mask": state_gate_valid_mask,
             "proxy_scores": None,
             "all_action_means": None,
             "all_action_stds": None,
@@ -229,7 +239,10 @@ class HybridPPOAgent:
             all_action_stds=all_action_stds,
             proxy_scores=proxy_scores_tensor,
         )
-        masked_logits = self._apply_semantic_soft_mask(raw_logits=raw_logits, semantic_scores=semantic_scores)
+        masked_logits = self._apply_state_gate_mask(
+            self._apply_semantic_soft_mask(raw_logits=raw_logits, semantic_scores=semantic_scores),
+            state_gate_valid_mask,
+        )
         context.update(
             {
                 "masked_logits": masked_logits,
@@ -240,6 +253,49 @@ class HybridPPOAgent:
             }
         )
         return context
+
+    def _action_ids_for_semantic(self, semantic: SemanticPrimitive) -> Tuple[int, ...]:
+        return tuple(int(spec.primitive_id) for spec in self.primitive_library.specs if spec.semantic == semantic)
+
+    def _state_gate_valid_mask(self, observations: torch.Tensor) -> torch.Tensor:
+        batch_size = observations.shape[0]
+        valid_mask = torch.ones((batch_size, self.primitive_library.action_dim), dtype=torch.bool, device=self.device)
+        feature_offset = observations.shape[1] - self._OBSERVED_FEATURE_DIM
+        if feature_offset < 0:
+            return valid_mask
+
+        features = observations[:, feature_offset:]
+        goal_distance = torch.clamp(features[:, 0], min=0.0)
+        relative_heading = torch.atan2(features[:, 4], features[:, 3])
+        articulation = torch.atan2(features[:, 6], features[:, 5])
+        if feature_offset > 0:
+            min_clearance = torch.min(observations[:, :feature_offset], dim=-1).values
+        else:
+            min_clearance = torch.ones((batch_size,), dtype=observations.dtype, device=self.device)
+
+        if self._recover_action_ids:
+            recover_allowed = torch.abs(articulation) >= float(self._RECOVER_ENTER_ARTICULATION_RAD)
+            valid_mask[:, list(self._recover_action_ids)] = recover_allowed.unsqueeze(-1)
+
+        if self._stop_action_ids:
+            stop_allowed = (
+                (goal_distance <= float(self._STOP_CHECK_GOAL_DISTANCE_NORM))
+                & (torch.abs(relative_heading) <= float(self._STOP_CHECK_HEADING_ERROR_RAD))
+                & (min_clearance <= float(self._STOP_CHECK_MIN_CLEARANCE_NORM))
+            )
+            valid_mask[:, list(self._stop_action_ids)] = stop_allowed.unsqueeze(-1)
+
+        return valid_mask
+
+    def _apply_state_gate_mask(self, logits: torch.Tensor, valid_mask: torch.Tensor) -> torch.Tensor:
+        if valid_mask.dtype != torch.bool:
+            valid_mask = valid_mask > 0.5
+        if torch.all(valid_mask):
+            return logits
+        blocked_logits = torch.full_like(logits, -1e9)
+        masked_logits = torch.where(valid_mask, logits, blocked_logits)
+        all_invalid = ~torch.any(valid_mask, dim=-1, keepdim=True)
+        return torch.where(all_invalid, logits, masked_logits)
 
     def _soft_mask_enabled(self) -> bool:
         return bool(self.config.soft_mask_enabled and self.primitive_library.proxy_sidecar is not None)

@@ -53,3 +53,23 @@ def test_scene_resets_are_collision_free_for_training_levels():
             env.reset(seed=seed, options={"level": level})
             assert not env.env.predict_collision(env.get_articulated_state())
             assert not env.env.predict_collision(env.get_goal_state())
+
+
+def test_warmup_reset_options_control_corridor_curriculum_width():
+    env = create_env_adapter(
+        env_config=EnvRuntimeConfig(max_low_level_steps_per_episode=20),
+        vehicle_config=VehicleConfig(),
+        observation_config=ObservationConfig(lidar_num_beams=8),
+        reward_config=RewardConfig(),
+    )
+
+    env.reset(seed=7, options={"level": "Warmup", "warmup_progress": 0.0})
+    wide_width = float(env.env._scene.metadata["corridor_width"])
+    assert not env.env.predict_collision(env.get_articulated_state())
+    assert not env.env.predict_collision(env.get_goal_state())
+
+    env.reset(seed=7, options={"level": "Warmup", "warmup_progress": 1.0})
+    narrow_width = float(env.env._scene.metadata["corridor_width"])
+    assert not env.env.predict_collision(env.get_articulated_state())
+    assert not env.env.predict_collision(env.get_goal_state())
+    assert wide_width > narrow_width
