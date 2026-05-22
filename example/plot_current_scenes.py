@@ -132,7 +132,14 @@ def _render_scene(ax: Axes, scene: SceneSpec, config: ExperimentConfig) -> None:
     ax.set_xlim(float(xmin), float(xmax))
     ax.set_ylim(float(ymin), float(ymax))
     ax.set_aspect("equal", adjustable="box")
-    ax.set_title(f"{scene.level} | seed={scene.metadata.get('seed', 'n/a')}")
+    title_bits = [f"{scene.level}", f"seed={scene.metadata.get('seed', 'n/a')}"]
+    variant = scene.metadata.get("scene_variant")
+    if variant:
+        title_bits.append(str(variant))
+    corridor_width = scene.metadata.get("corridor_width")
+    if corridor_width is not None:
+        title_bits.append(f"width={float(corridor_width):.1f}m")
+    ax.set_title(" | ".join(title_bits))
     ax.set_xlabel("x [m]")
     ax.set_ylabel("y [m]")
     ax.grid(True, linestyle=":", linewidth=0.5, alpha=0.4)

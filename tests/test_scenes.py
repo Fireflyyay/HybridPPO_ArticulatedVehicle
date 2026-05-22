@@ -26,6 +26,34 @@ def test_warmup_scene_uses_curriculum_progress_for_corridor_width():
     assert float(wide_scene.metadata["corridor_width"]) > float(narrow_scene.metadata["corridor_width"])
 
 
+def test_warmup_scene_uses_block_mixing_grid_variant_without_legacy_metadata():
+    factory = BaselineInspiredSceneFactory({"Warmup": SceneLevelConfig()}, vehicle_config=VehicleConfig())
+
+    scene = factory.generate("Warmup", np.random.default_rng(7), options={"warmup_progress": 0.25})
+
+    assert scene.metadata["scene_type"] == "block_mixing_plant"
+    assert scene.metadata["scene_variant"] == "warmup_curriculum"
+    assert scene.metadata["corridor_generation_mode"] == "polyline_warmup"
+    assert int(scene.metadata["parking_bay_count"]) == 1
+    assert 0.0 < float(scene.metadata["free_ratio"]) < 1.0
+    assert "aligned_to" not in scene.metadata
+
+
+def test_normal_scene_uses_constructive_grid_metadata():
+    factory = BaselineInspiredSceneFactory({"Normal": SceneLevelConfig()}, vehicle_config=VehicleConfig())
+
+    scene = factory.generate("Normal", np.random.default_rng(7))
+
+    assert scene.metadata["scene_type"] == "block_mixing_plant"
+    assert scene.metadata["scene_variant"] == "constructive_grid"
+    assert scene.metadata["corridor_generation_mode"] == "constructive_attachment"
+    assert int(scene.metadata["parking_bay_count"]) >= 1
+    assert int(scene.metadata["valid_start_candidate_count"]) >= 1
+    assert int(scene.metadata["valid_goal_candidate_count"]) >= 1
+    assert 0.0 < float(scene.metadata["free_ratio"]) < 1.0
+    assert len(scene.obstacles) > 0
+
+
 def test_training_schedule_emits_clamped_warmup_progress():
     schedule = TrainingScheduleConfig(
         debug_phase_episodes=2,
