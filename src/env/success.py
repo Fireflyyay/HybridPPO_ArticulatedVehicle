@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy as np
 
@@ -57,8 +57,16 @@ class ParkingSuccessChecker:
         self.vehicle_config = vehicle_config
         self.criteria = criteria
 
-    def evaluate(self, state: ArticulatedState, goal_state: ArticulatedState, collision_free: bool = True) -> SuccessMetrics:
-        current_front, current_rear = articulated_body_polygons(state, self.vehicle_config)
+    def evaluate(
+        self,
+        state: ArticulatedState,
+        goal_state: ArticulatedState,
+        collision_free: bool = True,
+        current_front: Optional[Polygon] = None,
+        current_rear: Optional[Polygon] = None,
+    ) -> SuccessMetrics:
+        if current_front is None or current_rear is None:
+            current_front, current_rear = articulated_body_polygons(state, self.vehicle_config)
         goal_front, goal_rear = articulated_body_polygons(goal_state, self.vehicle_config)
         front_overlap = float(current_front.intersection(goal_front).area) / (float(goal_front.area) + 1e-9)
         rear_overlap = float(current_rear.intersection(goal_rear).area) / (float(goal_rear.area) + 1e-9)

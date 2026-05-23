@@ -106,28 +106,50 @@ class ProxySafetySidecar:
         return int(np.argmin(diffs))
 
     def compute_proxy_scores(self, lidar_observation: np.ndarray, articulation_angle: float, gamma: float, eps: float) -> ProxySafetyQueryResult:
-        lidar = np.asarray(lidar_observation, dtype=np.float32).reshape(-1)
-        if lidar.shape[0] != self.num_rays:
-            raise ValueError(f"expected lidar observation of length {self.num_rays}, got {lidar.shape[0]}")
-        articulation_bin_index = self.select_articulation_bin(float(articulation_angle))
+        lidar = np.asarray(lidar_observation, dtype=np.float32).reshape(1, -1)
+        if lidar.shape[1] != self.num_rays:
+            raise ValueError(f"expected lidar observation of length {self.num_rays}, got {lidar.shape[1]}")
+        articulation_angles = np.array([float(articulation_angle)], dtype=np.float32)
+        proxy_scores, prefix_lengths, bin_indices = self.compute_proxy_scores_batch(
+            lidar_observations=lidar, articulation_angles=articulation_angles, gamma=gamma, eps=eps,
+        )
+        return ProxySafetyQueryResult(
+            articulation_bin_index=int(bin_indices[0]),
+            prefix_lengths=prefix_lengths[0],
+            proxy_scores=proxy_scores[0],
+        )
+
+    def compute_proxy_scores_batch(
+        self,
+        lidar_observations: np.ndarray,
+        articulation_angles: np.ndarray,
+        gamma: float,
+        eps: float,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        lidar = np.asarray(lidar_observations, dtype=np.float32)
+        if lidar.ndim != 2 or lidar.shape[1] != self.num_rays:
+            raise ValueError(f"expected lidar observations of shape (batch, {self.num_rays}), got {lidar.shape}")
+        batch_size = int(lidar.shape[0])
+        angles = np.asarray(articulation_angles, dtype=np.float32).reshape(-1)
+        if angles.shape[0] != batch_size:
+            raise ValueError(f"articulation_angles size {angles.shape[0]} does not match batch {batch_size}")
+
+        diffs = np.abs(_wrap_angle(angles.reshape(-1, 1) - self.articulation_bin_centers.reshape(1, -1)))
+        bin_indices = np.argmin(diffs, axis=1).astype(np.int64)
         dist_obs = np.clip(lidar, 0.0, 1.0) * max(float(self.lidar_range), 1e-6)
-        required = self.required_clearance[articulation_bin_index]
-        safe_by_ray = required <= dist_obs.reshape(1, 1, 1, -1)
+        required = self.required_clearance[bin_indices]
+        safe_by_ray = required <= dist_obs.reshape(batch_size, 1, 1, 1, -1)
         safe_step = np.all(safe_by_ray, axis=-1)
-        step_indices = np.arange(self.num_steps, dtype=np.int64).reshape(1, 1, -1)
-        valid_steps = step_indices < np.maximum(self.nominal_horizons, 0).reshape(self.num_actions, self.num_proxies, 1)
+        step_indices = np.arange(self.num_steps, dtype=np.int64).reshape(1, 1, 1, -1)
+        valid_steps = step_indices < np.maximum(self.nominal_horizons, 0).reshape(1, self.num_actions, self.num_proxies, 1)
         safe_step = np.logical_and(safe_step, valid_steps)
         prefix_safe = np.cumprod(safe_step.astype(np.int8), axis=-1)
         prefix_lengths = np.sum(prefix_safe, axis=-1).astype(np.float32)
-        horizon = np.maximum(self.nominal_horizons.astype(np.float32), 1.0)
+        horizon = np.maximum(self.nominal_horizons.astype(np.float32), 1.0).reshape(1, self.num_actions, self.num_proxies)
         proxy_scores = np.power(np.clip(prefix_lengths / horizon, 0.0, 1.0), float(gamma)).astype(np.float32)
         proxy_scores = np.clip(proxy_scores, float(eps), 1.0)
-        proxy_scores = np.where(self.proxy_valid_mask, proxy_scores, 0.0).astype(np.float32)
-        return ProxySafetyQueryResult(
-            articulation_bin_index=int(articulation_bin_index),
-            prefix_lengths=prefix_lengths,
-            proxy_scores=proxy_scores,
-        )
+        proxy_scores = np.where(self.proxy_valid_mask.reshape(1, self.num_actions, self.num_proxies), proxy_scores, 0.0).astype(np.float32)
+        return proxy_scores, prefix_lengths, bin_indices
 
 
 def save_proxy_safety_sidecar(path: str, sidecar: ProxySafetySidecar) -> None:

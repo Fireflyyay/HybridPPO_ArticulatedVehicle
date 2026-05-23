@@ -108,6 +108,8 @@ class MacroRolloutDriver:
                         if teacher_advice is None
                         else np.asarray(teacher_advice.parameter_targets[int(selection.macro_action.primitive_id)], dtype=np.float32).copy(),
                         teacher_weight=0.0 if teacher_advice is None else float(teacher_advice.weight),
+                        proxy_scores=None if selection.proxy_scores is None else np.asarray(selection.proxy_scores, dtype=np.float32).copy(),
+                        proxy_prefix_lengths=None if selection.proxy_prefix_lengths is None else np.asarray(selection.proxy_prefix_lengths, dtype=np.float32).copy(),
                     )
                 )
 

@@ -80,6 +80,8 @@ class MacroTransition:
     teacher_action_probs: Optional[np.ndarray] = None
     teacher_parameter_target: Optional[np.ndarray] = None
     teacher_weight: float = 0.0
+    proxy_scores: Optional[np.ndarray] = None
+    proxy_prefix_lengths: Optional[np.ndarray] = None
 
 
 @dataclass
