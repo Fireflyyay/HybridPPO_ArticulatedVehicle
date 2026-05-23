@@ -17,11 +17,16 @@ class SMDPBatch:
     dones: np.ndarray
     log_probs: np.ndarray
     values: np.ndarray
+    teacher_action_probs: np.ndarray
+    teacher_parameter_targets: np.ndarray
+    teacher_weights: np.ndarray
 
 
 class SMDPRolloutBuffer:
-    def __init__(self) -> None:
+    def __init__(self, action_dim: int, parameter_dim: int) -> None:
         self._items: List[MacroTransition] = []
+        self._action_dim = int(action_dim)
+        self._parameter_dim = int(parameter_dim)
 
     def add(self, transition: MacroTransition) -> None:
         self._items.append(transition)
@@ -45,4 +50,23 @@ class SMDPRolloutBuffer:
             dones=np.asarray([item.done for item in self._items], dtype=np.float32),
             log_probs=np.asarray([item.log_prob for item in self._items], dtype=np.float32),
             values=np.asarray([item.value for item in self._items], dtype=np.float32),
+            teacher_action_probs=np.stack(
+                [
+                    np.zeros((self._action_dim,), dtype=np.float32)
+                    if item.teacher_action_probs is None
+                    else np.asarray(item.teacher_action_probs, dtype=np.float32).reshape(self._action_dim)
+                    for item in self._items
+                ],
+                axis=0,
+            ).astype(np.float32),
+            teacher_parameter_targets=np.stack(
+                [
+                    np.zeros((self._parameter_dim,), dtype=np.float32)
+                    if item.teacher_parameter_target is None
+                    else np.asarray(item.teacher_parameter_target, dtype=np.float32).reshape(self._parameter_dim)
+                    for item in self._items
+                ],
+                axis=0,
+            ).astype(np.float32),
+            teacher_weights=np.asarray([item.teacher_weight for item in self._items], dtype=np.float32),
         )

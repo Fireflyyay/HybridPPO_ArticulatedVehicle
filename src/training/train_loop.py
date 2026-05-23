@@ -11,6 +11,7 @@ from training.checkpoint import CheckpointManager
 from training.evaluator import PolicyEvaluator
 from training.logger import TensorBoardLogger
 from training.rollout import MacroRolloutDriver
+from training.soft_teacher import CoarseGuidanceSoftTeacher
 
 
 def _resolve_device(device_name: str) -> torch.device:
@@ -59,11 +60,19 @@ class ExperimentTrainer:
             executor_config=config.primitive_executor,
         )
         self.macro_env = ParameterizedMacroActionWrapper(self.train_env, self.executor, gamma=self.agent.config.gamma)
+        self.soft_teacher = CoarseGuidanceSoftTeacher(
+            env=self.train_env,
+            executor=self.executor,
+            primitive_library=self.primitive_library,
+            vehicle_config=config.vehicle,
+            observation_config=config.observation,
+        )
         self.rollout_driver = MacroRolloutDriver(
             env=self.train_env,
             macro_env=self.macro_env,
             agent=self.agent,
             max_macro_steps=config.schedule.max_macro_steps_per_episode,
+            soft_teacher=self.soft_teacher,
         )
         self.evaluator = PolicyEvaluator(config, self.primitive_library)
         self.checkpoints = CheckpointManager(self.logger.run_dir, config.checkpoint, config)

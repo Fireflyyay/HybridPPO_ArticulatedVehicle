@@ -101,6 +101,46 @@ def test_hybrid_agent_action_and_update_smoke():
     assert "value_loss" in metrics
 
 
+def test_hybrid_agent_update_accepts_teacher_guidance_labels():
+    library = build_default_primitive_library()
+    config = HybridPPOConfig(
+        observation_dim=10,
+        action_dim=library.action_dim,
+        parameter_dim=library.parameter_dim,
+        mini_batch_size=2,
+        update_epochs=1,
+    )
+    agent = HybridPPOAgent(config, library)
+    teacher_action_probs = np.full((library.action_dim,), 0.05 / max(library.action_dim - 1, 1), dtype=np.float32)
+    teacher_action_probs[0] = 0.95
+    teacher_parameter_target = library.dict_to_vector({"path_length": 1.2, "duration": 0.6, "speed_scale": 0.4})
+
+    for index in range(4):
+        obs = np.linspace(0.0, 1.0, 10, dtype=np.float32) + index * 0.03
+        sample = agent.act(obs, teacher_action_probs=teacher_action_probs, teacher_weight=0.5)
+        agent.store_transition(
+            MacroTransition(
+                observation=obs,
+                action_id=sample.macro_action.primitive_id,
+                parameters=sample.macro_action.parameters,
+                reward=0.8,
+                tau=1,
+                next_observation=obs + 0.05,
+                done=bool(index == 3),
+                log_prob=sample.log_prob,
+                value=sample.value,
+                teacher_action_probs=teacher_action_probs,
+                teacher_parameter_target=teacher_parameter_target,
+                teacher_weight=0.5,
+            )
+        )
+
+    metrics = agent.update()
+    assert "teacher_discrete_kl" in metrics
+    assert "teacher_parameter_loss" in metrics
+    assert metrics["teacher_weight_mean"] > 0.0
+
+
 def test_hybrid_policy_network_responds_to_action_mask_input():
     torch.manual_seed(7)
     policy = HybridPolicyNetwork(

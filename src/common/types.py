@@ -77,6 +77,9 @@ class MacroTransition:
     done: bool
     log_prob: float
     value: float
+    teacher_action_probs: Optional[np.ndarray] = None
+    teacher_parameter_target: Optional[np.ndarray] = None
+    teacher_weight: float = 0.0
 
 
 @dataclass

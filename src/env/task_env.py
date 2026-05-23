@@ -273,6 +273,11 @@ class KinematicTaskEnv:
             "guidance_available": bool(self._guidance_available),
             "guidance_path_confidence": float(self._global_guidance.path_confidence),
         }
+        if self._scene is not None:
+            if "corridor_width" in self._scene.metadata:
+                info["corridor_width"] = float(self._scene.metadata["corridor_width"])
+            if "corridor_width_cells" in self._scene.metadata:
+                info["corridor_width_cells"] = int(self._scene.metadata["corridor_width_cells"])
         if success_metrics is not None:
             info.update(
                 {

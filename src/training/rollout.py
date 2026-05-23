@@ -7,6 +7,7 @@ from common.types import MacroTransition
 from env.adapter import UnifiedArticulatedEnvProtocol
 from env.macro_wrapper import ParameterizedMacroActionWrapper
 from model.agent import HybridPPOAgent
+from training.soft_teacher import CoarseGuidanceSoftTeacher
 
 
 @dataclass(frozen=True)
@@ -30,11 +31,13 @@ class MacroRolloutDriver:
         macro_env: ParameterizedMacroActionWrapper,
         agent: HybridPPOAgent,
         max_macro_steps: int,
+        soft_teacher: Optional[CoarseGuidanceSoftTeacher] = None,
     ) -> None:
         self.env = env
         self.macro_env = macro_env
         self.agent = agent
         self.max_macro_steps = int(max_macro_steps)
+        self.soft_teacher = soft_teacher
 
     def collect_episode(
         self,
@@ -56,13 +59,21 @@ class MacroRolloutDriver:
         last_info: Dict[str, object] = self.env.current_info()
         terminated = False
         truncated = False
+        previous_action_id: Optional[int] = None
 
         while macro_steps < self.max_macro_steps and not (terminated or truncated):
-            selection = self.agent.act(observation, deterministic=deterministic)
+            context = self.env.make_primitive_context()
+            teacher_advice = None if self.soft_teacher is None else self.soft_teacher.advise(observation, previous_action_id=previous_action_id)
+            selection = self.agent.act(
+                observation,
+                deterministic=deterministic,
+                teacher_action_probs=None if teacher_advice is None else teacher_advice.action_probs,
+                teacher_weight=0.0 if teacher_advice is None else float(teacher_advice.weight),
+            )
             next_observation, reward, terminated, truncated, step_info = self.macro_env.step(
                 selection.macro_action,
                 start_state=self.env.get_articulated_state(),
-                context=self.env.make_primitive_context(),
+                context=context,
             )
             if next_observation is None:
                 next_observation = self.env.build_observation()
@@ -92,12 +103,18 @@ class MacroRolloutDriver:
                         done=bool(final_done),
                         log_prob=float(selection.log_prob),
                         value=float(selection.value),
+                        teacher_action_probs=None if teacher_advice is None else np.asarray(teacher_advice.action_probs, dtype=np.float32).copy(),
+                        teacher_parameter_target=None
+                        if teacher_advice is None
+                        else np.asarray(teacher_advice.parameter_targets[int(selection.macro_action.primitive_id)], dtype=np.float32).copy(),
+                        teacher_weight=0.0 if teacher_advice is None else float(teacher_advice.weight),
                     )
                 )
 
             total_reward += float(reward)
             observation = next_observation
             last_info = dict(step_info)
+            previous_action_id = int(selection.macro_action.primitive_id)
 
         return EpisodeSummary(
             total_reward=float(total_reward),

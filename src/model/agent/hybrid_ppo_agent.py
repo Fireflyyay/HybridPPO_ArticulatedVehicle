@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, Mapping, Optional, Tuple
+from typing import Dict, Mapping, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -32,6 +32,8 @@ class HybridPPOAgent:
     _STOP_CHECK_GOAL_DISTANCE_NORM = 0.08
     _STOP_CHECK_HEADING_ERROR_RAD = float(np.deg2rad(12.0))
     _STOP_CHECK_MIN_CLEARANCE_NORM = 0.10
+    _TEACHER_DISCRETE_LOSS_COEF = 0.25
+    _TEACHER_PARAMETER_LOSS_COEF = 0.10
 
     def __init__(self, config: HybridPPOConfig, primitive_library: ParameterizedPrimitiveLibrary, device: Optional[torch.device] = None) -> None:
         self.config = config
@@ -47,7 +49,7 @@ class HybridPPOAgent:
         self.value_net = ValueNetwork(config.observation_dim, hidden_dim=config.hidden_dim).to(self.device)
         self.actor_optimizer = torch.optim.Adam(self.policy.parameters(), lr=config.actor_lr)
         self.critic_optimizer = torch.optim.Adam(self.value_net.parameters(), lr=config.critic_lr)
-        self.buffer = SMDPRolloutBuffer()
+        self.buffer = SMDPRolloutBuffer(action_dim=self.primitive_library.action_dim, parameter_dim=self.primitive_library.parameter_dim)
         self._low = torch.as_tensor(self.primitive_library.low, dtype=torch.float32, device=self.device)
         self._high = torch.as_tensor(self.primitive_library.high, dtype=torch.float32, device=self.device)
         self._action_active_mask = torch.as_tensor(
@@ -63,10 +65,21 @@ class HybridPPOAgent:
         self._proxy_parameter_scales = None
         self._proxy_valid_mask = None
 
-    def act(self, observation: np.ndarray, deterministic: bool = False) -> ActionSelection:
+    def act(
+        self,
+        observation: np.ndarray,
+        deterministic: bool = False,
+        teacher_action_probs: Optional[np.ndarray] = None,
+        teacher_weight: float = 0.0,
+    ) -> ActionSelection:
         obs_tensor = self._obs_tensor(observation)
         policy_context = self._masked_policy_context(obs_tensor)
-        discrete_dist = Categorical(probs=policy_context["masked_probs"])
+        selection_probs = self._selection_probs_from_context(
+            policy_context,
+            teacher_action_probs=teacher_action_probs,
+            teacher_weights=teacher_weight,
+        )
+        discrete_dist = Categorical(probs=selection_probs)
         action_ids = torch.argmax(discrete_dist.probs, dim=-1) if deterministic else discrete_dist.sample()
         continuous_dist = self._continuous_dist(obs_tensor, action_ids, action_mask=policy_context["network_action_mask"])
         parameters = continuous_dist.mean if deterministic else continuous_dist.sample()
@@ -99,6 +112,9 @@ class HybridPPOAgent:
         action_ids = torch.as_tensor(batch.action_ids, dtype=torch.int64, device=self.device)
         parameters = torch.as_tensor(batch.parameters, dtype=torch.float32, device=self.device)
         old_log_probs = torch.as_tensor(batch.log_probs, dtype=torch.float32, device=self.device)
+        teacher_action_probs = torch.as_tensor(batch.teacher_action_probs, dtype=torch.float32, device=self.device)
+        teacher_parameter_targets = torch.as_tensor(batch.teacher_parameter_targets, dtype=torch.float32, device=self.device)
+        teacher_weights = torch.as_tensor(batch.teacher_weights, dtype=torch.float32, device=self.device)
         with torch.no_grad():
             next_values = self.value_net(next_observations).squeeze(-1).cpu().numpy()
         targets = compute_smdp_targets(
@@ -123,6 +139,9 @@ class HybridPPOAgent:
         last_entropy_c = 0.0
         last_safety_loss = 0.0
         last_sampled_safety_score = 0.0
+        last_teacher_discrete_loss = 0.0
+        last_teacher_parameter_loss = 0.0
+        last_teacher_weight = 0.0
 
         for _ in range(int(self.config.update_epochs)):
             np.random.shuffle(indices)
@@ -135,7 +154,29 @@ class HybridPPOAgent:
                 adv_mb = advantages[mb]
                 return_mb = returns[mb]
                 old_log_prob_mb = old_log_probs[mb]
-                total_log_prob, entropy_d, entropy_c, safety_loss, sampled_safety_score = self.evaluate_actions(obs_mb, action_mb, param_mb)
+                teacher_prob_mb = teacher_action_probs[mb]
+                teacher_target_mb = teacher_parameter_targets[mb]
+                teacher_weight_mb = teacher_weights[mb]
+                eval_bundle = self._evaluate_action_bundle(
+                    observations=obs_mb,
+                    action_ids=action_mb,
+                    parameters=param_mb,
+                    teacher_action_probs=teacher_prob_mb,
+                    teacher_weights=teacher_weight_mb,
+                )
+                total_log_prob = eval_bundle["total_log_prob"]
+                entropy_d = eval_bundle["discrete_entropy"]
+                entropy_c = eval_bundle["continuous_entropy"]
+                safety_loss = eval_bundle["safety_loss"]
+                sampled_safety_score = eval_bundle["sampled_safety_score"]
+                teacher_discrete_loss, teacher_parameter_loss, teacher_weight_mean = self._teacher_guidance_losses(
+                    policy_context=eval_bundle["policy_context"],
+                    continuous_dist=eval_bundle["continuous_dist"],
+                    action_ids=action_mb,
+                    teacher_action_probs=teacher_prob_mb,
+                    teacher_parameter_targets=teacher_target_mb,
+                    teacher_weights=teacher_weight_mb,
+                )
                 ratio = torch.exp(total_log_prob - old_log_prob_mb)
                 surrogate_1 = ratio * adv_mb
                 surrogate_2 = torch.clamp(ratio, 1.0 - self.config.clip_epsilon, 1.0 + self.config.clip_epsilon) * adv_mb
@@ -143,6 +184,8 @@ class HybridPPOAgent:
                 actor_loss -= self.config.entropy_coef_discrete * entropy_d.mean()
                 actor_loss -= self.config.entropy_coef_continuous * entropy_c.mean()
                 actor_loss += float(self.config.safety_loss_coef) * safety_loss.mean()
+                actor_loss += float(self._TEACHER_DISCRETE_LOSS_COEF) * teacher_discrete_loss
+                actor_loss += float(self._TEACHER_PARAMETER_LOSS_COEF) * teacher_parameter_loss
                 predicted_values = self.value_net(obs_mb).squeeze(-1)
                 value_loss = F.mse_loss(predicted_values, return_mb)
 
@@ -162,6 +205,9 @@ class HybridPPOAgent:
                 last_entropy_c = float(entropy_c.mean().item())
                 last_safety_loss = float(safety_loss.mean().item())
                 last_sampled_safety_score = float(sampled_safety_score.mean().item())
+                last_teacher_discrete_loss = float(teacher_discrete_loss.item())
+                last_teacher_parameter_loss = float(teacher_parameter_loss.item())
+                last_teacher_weight = float(teacher_weight_mean.item())
 
         return {
             "actor_loss": last_actor_loss,
@@ -170,20 +216,35 @@ class HybridPPOAgent:
             "entropy_continuous": last_entropy_c,
             "safety_loss": last_safety_loss,
             "sampled_safety_score": last_sampled_safety_score,
+            "teacher_discrete_kl": last_teacher_discrete_loss,
+            "teacher_parameter_loss": last_teacher_parameter_loss,
+            "teacher_weight_mean": last_teacher_weight,
             "advantage_mean": float(advantages.mean().item()),
             "return_mean": float(returns.mean().item()),
         }
 
-    def evaluate_actions(self, observations: torch.Tensor, action_ids: torch.Tensor, parameters: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        policy_context = self._masked_policy_context(observations)
-        discrete_dist = Categorical(probs=policy_context["masked_probs"])
-        continuous_dist = self._continuous_dist(observations, action_ids, action_mask=policy_context["network_action_mask"])
-        active_mask = self._active_mask_tensor(action_ids)
-        discrete_log_prob = discrete_dist.log_prob(action_ids)
-        continuous_log_prob = continuous_dist.masked_log_prob(parameters, active_mask)
-        total_log_prob = discrete_log_prob + continuous_log_prob
-        safety_loss, sampled_safety_score = self._continuous_safety_terms(observations, policy_context, action_ids, parameters)
-        return total_log_prob, discrete_dist.entropy(), continuous_dist.masked_entropy(active_mask), safety_loss, sampled_safety_score
+    def evaluate_actions(
+        self,
+        observations: torch.Tensor,
+        action_ids: torch.Tensor,
+        parameters: torch.Tensor,
+        teacher_action_probs: Optional[torch.Tensor] = None,
+        teacher_weights: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        bundle = self._evaluate_action_bundle(
+            observations=observations,
+            action_ids=action_ids,
+            parameters=parameters,
+            teacher_action_probs=teacher_action_probs,
+            teacher_weights=teacher_weights,
+        )
+        return (
+            bundle["total_log_prob"],
+            bundle["discrete_entropy"],
+            bundle["continuous_entropy"],
+            bundle["safety_loss"],
+            bundle["sampled_safety_score"],
+        )
 
     def estimate_value(self, observation: np.ndarray) -> float:
         with torch.no_grad():
@@ -215,6 +276,124 @@ class HybridPPOAgent:
         action_list = action_ids.detach().cpu().tolist()
         masks = [self.primitive_library.active_mask(int(action_id)).astype(np.float32) for action_id in action_list]
         return torch.as_tensor(np.stack(masks, axis=0), dtype=torch.float32, device=self.device)
+
+    def _evaluate_action_bundle(
+        self,
+        observations: torch.Tensor,
+        action_ids: torch.Tensor,
+        parameters: torch.Tensor,
+        teacher_action_probs: Optional[torch.Tensor] = None,
+        teacher_weights: Optional[torch.Tensor] = None,
+    ) -> Dict[str, object]:
+        policy_context = self._masked_policy_context(observations)
+        selection_probs = self._selection_probs_from_context(
+            policy_context,
+            teacher_action_probs=teacher_action_probs,
+            teacher_weights=teacher_weights,
+        )
+        discrete_dist = Categorical(probs=selection_probs)
+        continuous_dist = self._continuous_dist(observations, action_ids, action_mask=policy_context["network_action_mask"])
+        active_mask = self._active_mask_tensor(action_ids)
+        discrete_log_prob = discrete_dist.log_prob(action_ids)
+        continuous_log_prob = continuous_dist.masked_log_prob(parameters, active_mask)
+        safety_loss, sampled_safety_score = self._continuous_safety_terms(observations, policy_context, action_ids, parameters)
+        return {
+            "policy_context": policy_context,
+            "continuous_dist": continuous_dist,
+            "total_log_prob": discrete_log_prob + continuous_log_prob,
+            "discrete_entropy": discrete_dist.entropy(),
+            "continuous_entropy": continuous_dist.masked_entropy(active_mask),
+            "safety_loss": safety_loss,
+            "sampled_safety_score": sampled_safety_score,
+        }
+
+    def _selection_probs_from_context(
+        self,
+        policy_context: Dict[str, torch.Tensor],
+        teacher_action_probs: Optional[Union[torch.Tensor, np.ndarray]] = None,
+        teacher_weights: Optional[Union[torch.Tensor, np.ndarray, float]] = None,
+    ) -> torch.Tensor:
+        if teacher_action_probs is None or teacher_weights is None:
+            return policy_context["masked_probs"]
+        return self._blend_teacher_action_probs(
+            policy_probs=policy_context["masked_probs"],
+            selection_action_mask=policy_context["selection_action_mask"],
+            teacher_action_probs=teacher_action_probs,
+            teacher_weights=teacher_weights,
+        )
+
+    def _blend_teacher_action_probs(
+        self,
+        policy_probs: torch.Tensor,
+        selection_action_mask: torch.Tensor,
+        teacher_action_probs: Union[torch.Tensor, np.ndarray],
+        teacher_weights: Union[torch.Tensor, np.ndarray, float],
+    ) -> torch.Tensor:
+        teacher_probs = torch.as_tensor(teacher_action_probs, dtype=policy_probs.dtype, device=self.device)
+        if teacher_probs.dim() == 1:
+            teacher_probs = teacher_probs.unsqueeze(0)
+        teacher_probs = torch.clamp(teacher_probs, min=0.0)
+        teacher_probs = teacher_probs * torch.clamp(selection_action_mask.to(dtype=policy_probs.dtype), min=0.0, max=1.0)
+        teacher_sum = teacher_probs.sum(dim=-1, keepdim=True)
+        normalized_teacher = teacher_probs / torch.clamp(teacher_sum, min=float(self.config.soft_mask_eps))
+        normalized_teacher = torch.where(teacher_sum > float(self.config.soft_mask_eps), normalized_teacher, policy_probs)
+
+        weight = torch.as_tensor(teacher_weights, dtype=policy_probs.dtype, device=self.device)
+        if weight.dim() == 0:
+            weight = weight.unsqueeze(0)
+        if weight.dim() == 1:
+            weight = weight.unsqueeze(-1)
+        if weight.shape[0] == 1 and policy_probs.shape[0] != 1:
+            weight = weight.expand(policy_probs.shape[0], 1)
+        weight = torch.clamp(weight, min=0.0, max=1.0)
+
+        mixed = (1.0 - weight) * policy_probs + weight * normalized_teacher
+        return mixed / torch.clamp(mixed.sum(dim=-1, keepdim=True), min=float(self.config.soft_mask_eps))
+
+    def _teacher_guidance_losses(
+        self,
+        policy_context: Dict[str, torch.Tensor],
+        continuous_dist: AffineBeta,
+        action_ids: torch.Tensor,
+        teacher_action_probs: torch.Tensor,
+        teacher_parameter_targets: torch.Tensor,
+        teacher_weights: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        zeros = torch.zeros((), dtype=torch.float32, device=self.device)
+        if teacher_action_probs.numel() == 0 or teacher_weights.numel() == 0:
+            return zeros, zeros, zeros
+
+        weights = torch.clamp(teacher_weights.reshape(-1), min=0.0, max=1.0)
+        if not torch.any(weights > float(self.config.soft_mask_eps)):
+            return zeros, zeros, zeros
+
+        teacher_probs = self._normalize_teacher_action_probs(
+            teacher_action_probs=teacher_action_probs,
+            selection_action_mask=policy_context["selection_action_mask"],
+        )
+        student_probs = torch.clamp(policy_context["masked_probs"], min=float(self.config.soft_mask_eps), max=1.0)
+        teacher_log_probs = torch.log(torch.clamp(teacher_probs, min=float(self.config.soft_mask_eps), max=1.0))
+        student_log_probs = torch.log(student_probs)
+        discrete_kl = torch.sum(teacher_probs * (teacher_log_probs - student_log_probs), dim=-1)
+
+        active_mask = self._active_mask_tensor(action_ids)
+        active_count = torch.clamp(active_mask.sum(dim=-1), min=1.0)
+        parameter_error = torch.square((continuous_dist.mean - teacher_parameter_targets) * active_mask).sum(dim=-1) / active_count
+        weight_sum = torch.clamp(weights.sum(), min=float(self.config.soft_mask_eps))
+        return (
+            torch.sum(discrete_kl * weights) / weight_sum,
+            torch.sum(parameter_error * weights) / weight_sum,
+            torch.mean(weights),
+        )
+
+    def _normalize_teacher_action_probs(self, teacher_action_probs: torch.Tensor, selection_action_mask: torch.Tensor) -> torch.Tensor:
+        teacher_probs = torch.clamp(teacher_action_probs, min=0.0)
+        teacher_probs = teacher_probs * torch.clamp(selection_action_mask.to(dtype=teacher_probs.dtype), min=0.0, max=1.0)
+        teacher_sum = teacher_probs.sum(dim=-1, keepdim=True)
+        normalized = teacher_probs / torch.clamp(teacher_sum, min=float(self.config.soft_mask_eps))
+        fallback = policy_context_probs = selection_action_mask.to(dtype=teacher_probs.dtype)
+        fallback = fallback / torch.clamp(fallback.sum(dim=-1, keepdim=True), min=float(self.config.soft_mask_eps))
+        return torch.where(teacher_sum > float(self.config.soft_mask_eps), normalized, fallback)
 
     def _masked_policy_context(self, observations: torch.Tensor) -> Dict[str, torch.Tensor]:
         state_gate_valid_mask = self._state_gate_valid_mask(observations)
