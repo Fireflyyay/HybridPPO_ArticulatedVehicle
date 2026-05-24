@@ -7,8 +7,8 @@ class VehicleConfig:
     wheel_base: float = 3.6
     hitch_offset: float = 1.8
     trailer_length: float = 1.8
-    step_seconds: float = 0.2
-    integrator_substeps: int = 80
+    step_seconds: float = 0.4
+    integrator_substeps: int = 5
     speed_min: float = -2.5
     speed_max: float = 2.5
     articulation_rate_min: float = -0.6632251157578452

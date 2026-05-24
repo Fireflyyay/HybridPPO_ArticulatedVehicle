@@ -91,19 +91,20 @@ class HybridPPOAgent:
         total_log_prob = discrete_log_prob + continuous_log_prob
         value = self.value_net(obs_tensor).squeeze(-1)
         parameter_vector = parameters.squeeze(0).detach().cpu().numpy().astype(np.float32)
-        proxy_scores_np: Optional[np.ndarray] = None
-        proxy_prefix_np: Optional[np.ndarray] = None
+        proxy_scores = None
+        proxy_prefix_lengths = None
         if policy_context.get("proxy_scores") is not None:
-            proxy_scores_np = policy_context["proxy_scores"].squeeze(0).detach().cpu().numpy().astype(np.float32)
-            proxy_prefix_np = policy_context["proxy_prefix_lengths"].squeeze(0).detach().cpu().numpy().astype(np.float32)
+            proxy_scores = policy_context["proxy_scores"].squeeze(0).detach().cpu().numpy().astype(np.float32).copy()
+        if policy_context.get("proxy_prefix_lengths") is not None:
+            proxy_prefix_lengths = policy_context["proxy_prefix_lengths"].squeeze(0).detach().cpu().numpy().astype(np.float32).copy()
         return ActionSelection(
             macro_action=MacroAction(primitive_id=int(action_ids.item()), parameters=parameter_vector),
             log_prob=float(total_log_prob.item()),
             value=float(value.item()),
             discrete_log_prob=float(discrete_log_prob.item()),
             continuous_log_prob=float(continuous_log_prob.item()),
-            proxy_scores=proxy_scores_np,
-            proxy_prefix_lengths=proxy_prefix_np,
+            proxy_scores=proxy_scores,
+            proxy_prefix_lengths=proxy_prefix_lengths,
         )
 
     def store_transition(self, transition: MacroTransition) -> None:
@@ -124,11 +125,6 @@ class HybridPPOAgent:
         teacher_action_probs = torch.as_tensor(batch.teacher_action_probs, dtype=torch.float32, device=self.device)
         teacher_parameter_targets = torch.as_tensor(batch.teacher_parameter_targets, dtype=torch.float32, device=self.device)
         teacher_weights = torch.as_tensor(batch.teacher_weights, dtype=torch.float32, device=self.device)
-        cached_proxy_scores: Optional[torch.Tensor] = None
-        cached_proxy_prefix: Optional[torch.Tensor] = None
-        if self._soft_mask_enabled() and batch.proxy_scores.size > 0 and batch.proxy_scores.shape[0] == num_samples:
-            cached_proxy_scores = torch.as_tensor(batch.proxy_scores, dtype=torch.float32, device=self.device)
-            cached_proxy_prefix = torch.as_tensor(batch.proxy_prefix_lengths, dtype=torch.float32, device=self.device)
         with torch.no_grad():
             next_values = self.value_net(next_observations).squeeze(-1).cpu().numpy()
         targets = compute_smdp_targets(
@@ -177,8 +173,6 @@ class HybridPPOAgent:
                     parameters=param_mb,
                     teacher_action_probs=teacher_prob_mb,
                     teacher_weights=teacher_weight_mb,
-                    cached_proxy_scores=cached_proxy_scores[mb] if cached_proxy_scores is not None else None,
-                    cached_proxy_prefix_lengths=cached_proxy_prefix[mb] if cached_proxy_prefix is not None else None,
                 )
                 total_log_prob = eval_bundle["total_log_prob"]
                 entropy_d = eval_bundle["discrete_entropy"]
@@ -300,14 +294,8 @@ class HybridPPOAgent:
         parameters: torch.Tensor,
         teacher_action_probs: Optional[torch.Tensor] = None,
         teacher_weights: Optional[torch.Tensor] = None,
-        cached_proxy_scores: Optional[torch.Tensor] = None,
-        cached_proxy_prefix_lengths: Optional[torch.Tensor] = None,
     ) -> Dict[str, object]:
-        policy_context = self._masked_policy_context(
-            observations,
-            cached_proxy_scores=cached_proxy_scores,
-            cached_proxy_prefix_lengths=cached_proxy_prefix_lengths,
-        )
+        policy_context = self._masked_policy_context(observations)
         selection_probs = self._selection_probs_from_context(
             policy_context,
             teacher_action_probs=teacher_action_probs,
@@ -413,30 +401,21 @@ class HybridPPOAgent:
         teacher_probs = teacher_probs * torch.clamp(selection_action_mask.to(dtype=teacher_probs.dtype), min=0.0, max=1.0)
         teacher_sum = teacher_probs.sum(dim=-1, keepdim=True)
         normalized = teacher_probs / torch.clamp(teacher_sum, min=float(self.config.soft_mask_eps))
-        fallback = policy_context_probs = selection_action_mask.to(dtype=teacher_probs.dtype)
+        fallback = selection_action_mask.to(dtype=teacher_probs.dtype)
         fallback = fallback / torch.clamp(fallback.sum(dim=-1, keepdim=True), min=float(self.config.soft_mask_eps))
         return torch.where(teacher_sum > float(self.config.soft_mask_eps), normalized, fallback)
 
-    def _masked_policy_context(
-        self,
-        observations: torch.Tensor,
-        cached_proxy_scores: Optional[torch.Tensor] = None,
-        cached_proxy_prefix_lengths: Optional[torch.Tensor] = None,
-    ) -> Dict[str, torch.Tensor]:
+    def _masked_policy_context(self, observations: torch.Tensor) -> Dict[str, torch.Tensor]:
         state_gate_valid_mask = self._state_gate_valid_mask(observations)
         proxy_scores_tensor = None
         proxy_prefix_lengths_tensor = None
         proxy_action_mask = torch.ones((observations.shape[0], self.primitive_library.action_dim), dtype=torch.float32, device=self.device)
         proxy_action_has_safe_prefix = torch.ones_like(state_gate_valid_mask)
         if self._soft_mask_enabled():
-            if cached_proxy_scores is not None and cached_proxy_prefix_lengths is not None:
-                proxy_scores_tensor = cached_proxy_scores.to(device=self.device, dtype=torch.float32)
-                proxy_prefix_lengths_tensor = cached_proxy_prefix_lengths.to(device=self.device, dtype=torch.float32)
-            else:
-                self._ensure_proxy_tensors()
-                proxy_scores, proxy_prefix_lengths, _articulation_bins = self._query_proxy_scores(observations)
-                proxy_scores_tensor = torch.as_tensor(proxy_scores, dtype=torch.float32, device=self.device)
-                proxy_prefix_lengths_tensor = torch.as_tensor(proxy_prefix_lengths, dtype=torch.float32, device=self.device)
+            self._ensure_proxy_tensors()
+            proxy_scores, proxy_prefix_lengths, _articulation_bins = self._query_proxy_scores(observations)
+            proxy_scores_tensor = torch.as_tensor(proxy_scores, dtype=torch.float32, device=self.device)
+            proxy_prefix_lengths_tensor = torch.as_tensor(proxy_prefix_lengths, dtype=torch.float32, device=self.device)
             proxy_action_mask, proxy_action_has_safe_prefix = self._aggregate_proxy_action_mask(
                 proxy_scores=proxy_scores_tensor,
                 proxy_prefix_lengths=proxy_prefix_lengths_tensor,
@@ -632,21 +611,24 @@ class HybridPPOAgent:
         feature_offset = self._base_feature_offset(observations)
         if observation_np.shape[1] < feature_offset + self._OBSERVED_FEATURE_DIM:
             raise ValueError("observation does not contain enough post-lidar features to reconstruct articulation angle")
-        articulation_angles = np.arctan2(
-            observation_np[:, feature_offset + 6],
-            observation_np[:, feature_offset + 5],
-        ).astype(np.float32)
-        lidar = observation_np[:, :feature_offset].astype(np.float32)
-        scores, prefix_lengths, bins = sidecar.compute_proxy_scores_batch(
-            lidar_observations=lidar,
-            articulation_angles=articulation_angles,
-            gamma=float(self.config.soft_mask_gamma),
-            eps=float(self.config.soft_mask_eps),
-        )
+        scores = []
+        prefix_lengths = []
+        bins = []
+        for row in observation_np:
+            articulation_angle = float(np.arctan2(row[feature_offset + 6], row[feature_offset + 5]))
+            query = sidecar.compute_proxy_scores(
+                lidar_observation=row[:feature_offset],
+                articulation_angle=articulation_angle,
+                gamma=float(self.config.soft_mask_gamma),
+                eps=float(self.config.soft_mask_eps),
+            )
+            scores.append(query.proxy_scores)
+            prefix_lengths.append(query.prefix_lengths)
+            bins.append(query.articulation_bin_index)
         return (
-            scores.astype(np.float32),
-            prefix_lengths.astype(np.float32),
-            bins.astype(np.int64),
+            np.stack(scores, axis=0).astype(np.float32),
+            np.stack(prefix_lengths, axis=0).astype(np.float32),
+            np.asarray(bins, dtype=np.int64),
         )
 
     def _all_action_distribution_moments(self, observations: torch.Tensor, action_mask: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:

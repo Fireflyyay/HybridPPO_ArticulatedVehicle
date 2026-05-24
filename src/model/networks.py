@@ -57,6 +57,25 @@ class HybridPolicyNetwork(nn.Module):
             action_embed = action_embed.unsqueeze(0)
         return self.continuous_head(torch.cat([encoded, action_embed], dim=-1))
 
+    def continuous_raw_all_actions(self, observation: torch.Tensor, action_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Compute continuous distribution raw parameters for all actions in one batched forward pass.
+
+        Returns:
+            Tensor of shape ``(batch_size, action_dim, 2 * parameter_dim)``.
+        """
+        encoded = self.encode(observation, action_mask=action_mask)
+        batch_size = encoded.shape[0]
+        num_actions = self.action_dim
+        embed_dim = self.action_embedding.weight.shape[1]
+
+        encoded_expanded = encoded.unsqueeze(1).expand(batch_size, num_actions, -1).reshape(batch_size * num_actions, -1)
+
+        all_action_ids = torch.arange(num_actions, device=observation.device).unsqueeze(0).expand(batch_size, num_actions).reshape(batch_size * num_actions)
+        action_embed = self.action_embedding(all_action_ids)
+
+        raw = self.continuous_head(torch.cat([encoded_expanded, action_embed], dim=-1))
+        return raw.reshape(batch_size, num_actions, -1)
+
 
 class ValueNetwork(nn.Module):
     def __init__(self, observation_dim: int, hidden_dim: int = 256) -> None:

@@ -25,7 +25,8 @@ def test_macro_wrapper_accumulates_discounted_reward():
     executor = ParameterizedPrimitiveExecutor(library)
     env = DummyLowLevelEnv()
     wrapper = ParameterizedMacroActionWrapper(env, executor, gamma=0.9)
-    params = library.dict_to_vector({"duration": 0.25})
+    # step_seconds=0.4, duration=0.9 → ceil(0.9/0.4)=3 low-level steps
+    params = library.dict_to_vector({"duration": 0.9})
     macro_action = MacroAction(primitive_id=7, parameters=params)
     _, total_reward, _, _, info = wrapper.step(macro_action)
     assert np.isclose(total_reward, 1.0 + 0.9 + 0.9**2)

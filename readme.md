@@ -155,9 +155,7 @@ PYTHONPATH=src conda run -n HOPE python example/build_proxy_safety_sidecar.py \
 - `--max-low-level-steps`：低层控制步数上限
 - `--eval-interval`：评估间隔
 - `--eval-episodes`：每个 level 的评估回合数
-- `--warmup-episodes`：Warmup 阶段持续回合数
-- `--debug-phase-episodes`：Debug 阶段持续回合数
-- `--train-level`：debug 后默认训练场景 level
+- `--warmup-min-episodes`：success band 解锁前，Warmup 至少要持续的回合数；Warmup 隧道宽度会先按既有课程收敛到最窄，再在最窄宽度达到掌握阈值后才进入 Warmup/Normal 的 success band 课程
 - `--seed`：随机种子
 - `--device`：`auto`、`cpu` 或 `cuda`
 - `--log-root`：TensorBoard 日志根目录

@@ -26,54 +26,36 @@ def test_warmup_scene_uses_curriculum_progress_for_corridor_width():
     assert float(wide_scene.metadata["corridor_width"]) > float(narrow_scene.metadata["corridor_width"])
 
 
-def test_warmup_scene_uses_block_mixing_grid_variant_without_legacy_metadata():
+def test_warmup_scene_uses_warmup_bay_metadata():
     factory = BaselineInspiredSceneFactory({"Warmup": SceneLevelConfig()}, vehicle_config=VehicleConfig())
 
     scene = factory.generate("Warmup", np.random.default_rng(7), options={"warmup_progress": 0.25})
 
-    assert scene.metadata["scene_type"] == "block_mixing_plant"
-    assert scene.metadata["scene_variant"] == "warmup_curriculum"
-    assert scene.metadata["corridor_generation_mode"] == "polyline_warmup"
-    assert int(scene.metadata["parking_bay_count"]) == 1
-    assert 0.0 < float(scene.metadata["free_ratio"]) < 1.0
-    assert "aligned_to" not in scene.metadata
+    assert scene.metadata["scene_type"] == "warmup_centerline"
+    assert scene.metadata["aligned_to"] == "ppo_articulated_vehicle"
+    assert float(scene.metadata["corridor_width"]) > 0.0
+    assert "warmup_progress" in scene.metadata
 
 
-def test_normal_scene_uses_constructive_grid_metadata():
+def test_normal_scene_uses_block_mixing_metadata():
     factory = BaselineInspiredSceneFactory({"Normal": SceneLevelConfig()}, vehicle_config=VehicleConfig())
 
     scene = factory.generate("Normal", np.random.default_rng(7))
 
     assert scene.metadata["scene_type"] == "block_mixing_plant"
-    assert scene.metadata["scene_variant"] == "constructive_grid"
-    assert scene.metadata["corridor_generation_mode"] == "constructive_attachment"
-    assert int(scene.metadata["parking_bay_count"]) >= 1
-    assert int(scene.metadata["valid_start_candidate_count"]) >= 1
-    assert int(scene.metadata["valid_goal_candidate_count"]) >= 1
-    assert 0.0 < float(scene.metadata["free_ratio"]) < 1.0
+    assert scene.metadata["aligned_to"] == "ppo_articulated_vehicle"
+    assert float(scene.metadata["corridor_width"]) > 0.0
+    assert int(scene.metadata["free_shape_count"]) >= 1
+    assert int(scene.metadata["valid_candidate_count"]) >= 2
     assert len(scene.obstacles) > 0
 
 
-def test_training_schedule_emits_clamped_warmup_progress():
+def test_training_schedule_clamps_warmup_progress_from_warmup_index():
     schedule = TrainingScheduleConfig(
-        debug_phase_episodes=2,
-        warmup_episodes=8,
         warmup_corridor_convergence_episodes=4,
     )
 
-    assert schedule.reset_options_for_episode(0) == {"level": "Debug"}
-    assert schedule.reset_options_for_episode(2) == {
-        "level": "Warmup",
-        "warmup_episode_idx": 0,
-        "warmup_progress": 0.0,
-    }
-    assert schedule.reset_options_for_episode(4) == {
-        "level": "Warmup",
-        "warmup_episode_idx": 2,
-        "warmup_progress": 0.5,
-    }
-    assert schedule.reset_options_for_episode(8) == {
-        "level": "Warmup",
-        "warmup_episode_idx": 6,
-        "warmup_progress": 1.0,
-    }
+    assert np.isclose(schedule.warmup_progress_for_index(0), 0.0)
+    assert np.isclose(schedule.warmup_progress_for_index(2), 0.5)
+    assert np.isclose(schedule.warmup_progress_for_index(4), 1.0)
+    assert np.isclose(schedule.warmup_progress_for_index(6), 1.0)

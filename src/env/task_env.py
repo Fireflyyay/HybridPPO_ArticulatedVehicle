@@ -56,9 +56,6 @@ class KinematicTaskEnv:
         self._obstacle_segment_y1 = np.empty((0,), dtype=np.float64)
         self._obstacle_segment_dx = np.empty((0,), dtype=np.float64)
         self._obstacle_segment_dy = np.empty((0,), dtype=np.float64)
-        self._obstacle_segment_mid_x = np.empty((0,), dtype=np.float64)
-        self._obstacle_segment_mid_y = np.empty((0,), dtype=np.float64)
-        self._obstacle_segment_half_len = np.empty((0,), dtype=np.float64)
         self._step_count = 0
         self._last_info: Dict[str, object] = {}
         self._global_guidance = CoarseGlobalGuidance()
@@ -105,15 +102,10 @@ class KinematicTaskEnv:
         next_state, _ = self.kinematics.step_with_diagnostics(previous_state, control)
         self._step_count += 1
 
-        next_front, next_rear = articulated_body_polygons(next_state, self.vehicle_config)
-        collision = self._intersects_obstacles(next_state, front_poly=next_front, rear_poly=next_rear)
-        out_of_bounds = self._is_out_of_bounds(next_state, front_poly=next_front, rear_poly=next_rear)
+        collision = self._intersects_obstacles(next_state)
+        out_of_bounds = self._is_out_of_bounds(next_state)
         collision_free = (not collision) and (not out_of_bounds)
-        success_metrics = self.success_checker.evaluate(
-            next_state, self._goal_state,
-            collision_free=collision_free,
-            current_front=next_front, current_rear=next_rear,
-        )
+        success_metrics = self.success_checker.evaluate(next_state, self._goal_state, collision_free=collision_free)
         timeout = self._step_count >= int(self.env_config.max_low_level_steps_per_episode)
 
         terminated = False
@@ -281,11 +273,6 @@ class KinematicTaskEnv:
             "guidance_available": bool(self._guidance_available),
             "guidance_path_confidence": float(self._global_guidance.path_confidence),
         }
-        if self._scene is not None:
-            if "corridor_width" in self._scene.metadata:
-                info["corridor_width"] = float(self._scene.metadata["corridor_width"])
-            if "corridor_width_cells" in self._scene.metadata:
-                info["corridor_width_cells"] = int(self._scene.metadata["corridor_width_cells"])
         if success_metrics is not None:
             info.update(
                 {
@@ -330,9 +317,6 @@ class KinematicTaskEnv:
             self._obstacle_segment_y1 = np.empty((0,), dtype=np.float64)
             self._obstacle_segment_dx = np.empty((0,), dtype=np.float64)
             self._obstacle_segment_dy = np.empty((0,), dtype=np.float64)
-            self._obstacle_segment_mid_x = np.empty((0,), dtype=np.float64)
-            self._obstacle_segment_mid_y = np.empty((0,), dtype=np.float64)
-            self._obstacle_segment_half_len = np.empty((0,), dtype=np.float64)
             return
 
         x1s = []
@@ -349,20 +333,12 @@ class KinematicTaskEnv:
             self._obstacle_segment_y1 = np.empty((0,), dtype=np.float64)
             self._obstacle_segment_dx = np.empty((0,), dtype=np.float64)
             self._obstacle_segment_dy = np.empty((0,), dtype=np.float64)
-            self._obstacle_segment_mid_x = np.empty((0,), dtype=np.float64)
-            self._obstacle_segment_mid_y = np.empty((0,), dtype=np.float64)
-            self._obstacle_segment_half_len = np.empty((0,), dtype=np.float64)
             return
 
         self._obstacle_segment_x1 = np.asarray(x1s, dtype=np.float64)
         self._obstacle_segment_y1 = np.asarray(y1s, dtype=np.float64)
         self._obstacle_segment_dx = np.asarray(x2s, dtype=np.float64) - self._obstacle_segment_x1
         self._obstacle_segment_dy = np.asarray(y2s, dtype=np.float64) - self._obstacle_segment_y1
-        self._obstacle_segment_mid_x = self._obstacle_segment_x1 + 0.5 * self._obstacle_segment_dx
-        self._obstacle_segment_mid_y = self._obstacle_segment_y1 + 0.5 * self._obstacle_segment_dy
-        self._obstacle_segment_half_len = 0.5 * np.sqrt(
-            self._obstacle_segment_dx ** 2 + self._obstacle_segment_dy ** 2
-        )
 
     @staticmethod
     def _append_ring_segments(
@@ -425,19 +401,11 @@ class KinematicTaskEnv:
         if self._obstacle_segment_x1.size == 0:
             return np.full(ray_dx.shape, float(max_range), dtype=np.float64)
 
-        dist_to_mid = np.sqrt(
-            (self._obstacle_segment_mid_x - float(x)) ** 2
-            + (self._obstacle_segment_mid_y - float(y)) ** 2
-        )
-        within_range = (dist_to_mid - self._obstacle_segment_half_len) <= float(max_range)
-        if not np.any(within_range):
-            return np.full(ray_dx.shape, float(max_range), dtype=np.float64)
-
         epsilon = 1e-9
-        qmp_x = self._obstacle_segment_x1[within_range].reshape(1, -1) - float(x)
-        qmp_y = self._obstacle_segment_y1[within_range].reshape(1, -1) - float(y)
-        seg_dx = self._obstacle_segment_dx[within_range].reshape(1, -1)
-        seg_dy = self._obstacle_segment_dy[within_range].reshape(1, -1)
+        qmp_x = self._obstacle_segment_x1.reshape(1, -1) - float(x)
+        qmp_y = self._obstacle_segment_y1.reshape(1, -1) - float(y)
+        seg_dx = self._obstacle_segment_dx.reshape(1, -1)
+        seg_dy = self._obstacle_segment_dy.reshape(1, -1)
         ray_dx_2d = ray_dx.reshape(-1, 1)
         ray_dy_2d = ray_dy.reshape(-1, 1)
 
@@ -458,14 +426,12 @@ class KinematicTaskEnv:
         distances[~np.isfinite(distances)] = float(max_range)
         return distances
 
-    def _intersects_obstacles(self, state: ArticulatedState, front_poly=None, rear_poly=None) -> bool:
+    def _intersects_obstacles(self, state: ArticulatedState) -> bool:
         if self._obstacle_union is None:
             return False
-        if front_poly is None or rear_poly is None:
-            front_poly, rear_poly = articulated_body_polygons(state, self.vehicle_config)
+        front_poly, rear_poly = articulated_body_polygons(state, self.vehicle_config)
         return bool(front_poly.intersects(self._obstacle_union) or rear_poly.intersects(self._obstacle_union))
 
-    def _is_out_of_bounds(self, state: ArticulatedState, front_poly=None, rear_poly=None) -> bool:
-        if front_poly is None or rear_poly is None:
-            front_poly, rear_poly = articulated_body_polygons(state, self.vehicle_config)
+    def _is_out_of_bounds(self, state: ArticulatedState) -> bool:
+        front_poly, rear_poly = articulated_body_polygons(state, self.vehicle_config)
         return not bool(self._world_box.covers(front_poly) and self._world_box.covers(rear_poly))

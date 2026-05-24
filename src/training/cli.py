@@ -14,9 +14,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-low-level-steps", type=int, default=None)
     parser.add_argument("--eval-interval", type=int, default=None)
     parser.add_argument("--eval-episodes", type=int, default=None)
-    parser.add_argument("--warmup-episodes", type=int, default=None)
-    parser.add_argument("--debug-phase-episodes", type=int, default=None)
-    parser.add_argument("--train-level", type=str, default=None)
+    parser.add_argument("--warmup-min-episodes", type=int, default=None)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--log-root", type=str, default=None)
@@ -30,6 +28,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--soft-mask-floor", type=float, default=None)
     parser.add_argument("--safety-loss-coef", type=float, default=None)
     parser.add_argument("--resume", type=str, default=None)
+    parser.add_argument("--disable-teacher", action="store_true", default=False)
     return parser
 
 
@@ -80,17 +79,11 @@ def build_experiment_config(args: argparse.Namespace) -> ExperimentConfig:
             if args.max_macro_steps is not None
             else config.schedule.max_macro_steps_per_episode
         ),
-        debug_phase_episodes=(
-            int(args.debug_phase_episodes)
-            if args.debug_phase_episodes is not None
-            else config.schedule.debug_phase_episodes
+        warmup_min_episodes=(
+            int(args.warmup_min_episodes)
+            if args.warmup_min_episodes is not None
+            else config.schedule.warmup_min_episodes
         ),
-        warmup_episodes=(
-            int(args.warmup_episodes)
-            if args.warmup_episodes is not None
-            else config.schedule.warmup_episodes
-        ),
-        default_train_level=str(args.train_level) if args.train_level is not None else config.schedule.default_train_level,
     )
     evaluation = replace(
         config.evaluation,
@@ -126,6 +119,7 @@ def build_experiment_config(args: argparse.Namespace) -> ExperimentConfig:
         logging=logging,
         checkpoint=checkpoint,
         evaluation=evaluation,
+        teacher_enabled=not args.disable_teacher,
     )
 
 

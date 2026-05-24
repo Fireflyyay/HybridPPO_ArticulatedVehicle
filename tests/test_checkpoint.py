@@ -16,7 +16,18 @@ def test_checkpoint_manager_round_trip(tmp_path):
         primitive_library=library,
     )
     manager = CheckpointManager(str(tmp_path), CheckpointConfig(save_interval=1), config)
-    path = manager.save_latest(agent, episode_idx=4, update_idx=2)
+    path = manager.save_latest(
+        agent,
+        episode_idx=4,
+        update_idx=2,
+        extra={
+            "curriculum": {
+                "band_unlocked": True,
+                "level_counts": {"Warmup": 4, "Normal": 1},
+            }
+        },
+    )
     meta = manager.load(path, agent)
     assert meta["episode_idx"] == 4
     assert meta["update_idx"] == 2
+    assert meta["extra"]["curriculum"]["band_unlocked"] is True

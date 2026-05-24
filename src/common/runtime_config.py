@@ -54,6 +54,7 @@ class SceneLevelConfig:
     parking_bay_depth_range: Tuple[int, int] = (8, 12)
     parking_head_wall_clearance: float = 1.0
     warmup_corridor_max_width: float = 6.0
+    warmup_turn_count_range: Tuple[int, int] = (1, 2)
 
     def warmup_corridor_min_width(self) -> float:
         return float(min(self.corridor_width_range[0], self.corridor_width_range[1]))
@@ -81,6 +82,7 @@ def build_scene_presets() -> Dict[str, SceneLevelConfig]:
             pair_heading_diff_range_deg=(0.0, 120.0),
             corridor_width_range=(6, 6),
             warmup_corridor_max_width=16.0,
+            warmup_turn_count_range=(1, 2),
             branch_count_range=(0, 0),
             parking_bay_count_range=(1, 1),
             parking_bay_length_range=(6, 8),
@@ -178,43 +180,20 @@ class TrainingScheduleConfig:
     total_episodes: int = 35000
     episodes_per_update: int = 128
     max_macro_steps_per_episode: int = 64
-    debug_phase_episodes: int = 0
     warmup_level: str = "Warmup"
-    warmup_episodes: int = 10000
+    target_level: str = "Normal"
     warmup_corridor_convergence_episodes: int = 8000
-    default_train_level: str = "Normal"
-    debug_level: str = "Debug"
+    curriculum_recent_window: int = 100
+    warmup_min_episodes: int = 10000
+    warmup_mastery_success_rate: float = 0.75
+    target_success_band: Tuple[float, float] = (0.25, 0.60)
+    target_focus_prob: float = 0.9
+    warmup_bridge_prob: float = 0.5
 
-    def level_for_episode(self, episode_idx: int) -> str:
-        if int(episode_idx) < int(self.debug_phase_episodes):
-            return str(self.debug_level)
-        if int(episode_idx) < int(self.debug_phase_episodes) + int(self.warmup_episodes):
-            return str(self.warmup_level)
-        return str(self.default_train_level)
-
-    def warmup_episode_index(self, episode_idx: int) -> Optional[int]:
-        warmup_start = int(self.debug_phase_episodes)
-        warmup_end = warmup_start + int(self.warmup_episodes)
-        if int(episode_idx) < warmup_start or int(episode_idx) >= warmup_end:
-            return None
-        return int(episode_idx) - warmup_start
-
-    def warmup_corridor_progress(self, episode_idx: int) -> Optional[float]:
-        warmup_episode_idx = self.warmup_episode_index(episode_idx)
-        if warmup_episode_idx is None:
-            return None
-        convergence_episodes = max(1, int(self.warmup_corridor_convergence_episodes))
-        return float(min(1.0, max(0.0, warmup_episode_idx / convergence_episodes)))
-
-    def reset_options_for_episode(self, episode_idx: int) -> Dict[str, object]:
-        level = self.level_for_episode(episode_idx)
-        options: Dict[str, object] = {"level": str(level)}
-        warmup_episode_idx = self.warmup_episode_index(episode_idx)
-        if warmup_episode_idx is None:
-            return options
-        options["warmup_episode_idx"] = int(warmup_episode_idx)
-        options["warmup_progress"] = float(self.warmup_corridor_progress(episode_idx) or 0.0)
-        return options
+    def warmup_progress_for_index(self, warmup_episode_idx: int) -> float:
+        index = max(0, int(warmup_episode_idx))
+        convergence = max(1, int(self.warmup_corridor_convergence_episodes))
+        return float(min(1.0, index / convergence))
 
 
 @dataclass(frozen=True)
@@ -255,6 +234,7 @@ class ExperimentConfig:
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     checkpoint: CheckpointConfig = field(default_factory=CheckpointConfig)
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
+    teacher_enabled: bool = False
 
     def to_dict(self) -> Dict[str, object]:
         return asdict(self)

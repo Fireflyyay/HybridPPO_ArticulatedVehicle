@@ -8,8 +8,8 @@ def test_vehicle_config_defaults_match_ppo_articulated_vehicle():
     assert config.wheel_base == 3.6
     assert config.hitch_offset == 1.8
     assert config.trailer_length == 1.8
-    assert config.step_seconds == 0.2
-    assert config.integrator_substeps == 80
+    assert config.step_seconds == 0.4
+    assert config.integrator_substeps == 5
     assert config.speed_min == -2.5
     assert config.speed_max == 2.5
     assert config.articulation_rate_min == -0.6632251157578452
