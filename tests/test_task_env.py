@@ -18,6 +18,8 @@ def test_task_env_reset_and_step_produce_expected_fields():
     assert info["done_reason"] == "reset"
     assert "guidance_available" in info
     assert "guidance_path_confidence" in info
+    assert "scene_metadata" in info
+    assert "corridor_width" in info
 
     next_observation, reward, terminated, truncated, step_info = env.step(np.array([0.0, 0.5], dtype=np.float32))
     assert next_observation.shape == (ObservationConfig(lidar_num_beams=8).observation_dim,)
@@ -27,6 +29,10 @@ def test_task_env_reset_and_step_produce_expected_fields():
     assert "collision" in step_info
     assert "goal_reached" in step_info
     assert "reward_info" in step_info
+    assert "topology_progress" in step_info["reward_info"]
+    assert "distance_progress" in step_info["reward_info"]
+    assert "near_goal_factor" in step_info["reward_info"]
+    assert "rear_overlap_progress" in step_info["reward_info"]
 
 
 def test_task_env_default_observation_uses_108_beams():

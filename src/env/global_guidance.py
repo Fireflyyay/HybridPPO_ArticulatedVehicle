@@ -41,12 +41,24 @@ class CoarseGlobalGuidance:
         self.path_confidence = 0.0
         self.inflation_radius = 0.0
 
+        self.cost_to_go_map: Optional[np.ndarray] = None
+        self.cost_to_go_bounds: Optional[Tuple[float, float, float, float]] = None
+        self.cost_to_go_goal_radius: float = 2.0
+
     def clear_path(self) -> None:
         self.path_points_world = None
         self.path_s = None
         self.progress_idx = 0
         self.path_confidence = 0.0
         self.inflation_radius = 0.0
+
+    def _clear_cost_to_go(self) -> None:
+        self.cost_to_go_map = None
+        self.cost_to_go_bounds = None
+
+    def _clear_all(self) -> None:
+        self.clear_path()
+        self._clear_cost_to_go()
 
     def plan_scene_path(
         self,
@@ -59,12 +71,17 @@ class CoarseGlobalGuidance:
         start = self._world_to_cell(float(start_xy[0]), float(start_xy[1]), bounds, occupancy.shape)
         goal = self._world_to_cell(float(goal_xy[0]), float(goal_xy[1]), bounds, occupancy.shape)
         if start is None or goal is None:
-            self.clear_path()
+            self._clear_all()
             return False
 
         occupancy[start[0], start[1]] = 0
         occupancy[goal[0], goal[1]] = 0
         cell_path = self._astar(occupancy, start, goal)
+
+        # Compute the cost-to-go map regardless of A* success — it provides a
+        # cheap global topology prior that is useful even without a viable path.
+        self._compute_backward_cost_to_go(occupancy, goal, bounds)
+
         if cell_path is None or len(cell_path) == 0:
             self.clear_path()
             return False
@@ -236,6 +253,106 @@ class CoarseGlobalGuidance:
     def _cell_to_world(self, i: int, j: int, bounds: Tuple[float, float, float, float]) -> Tuple[float, float]:
         xmin, _, ymin, _ = bounds
         return float(xmin) + float(i) * self.grid_resolution, float(ymin) + float(j) * self.grid_resolution
+
+    def _compute_backward_cost_to_go(
+        self,
+        occupancy: np.ndarray,
+        goal_cell: Tuple[int, int],
+        bounds: Tuple[float, float, float, float],
+    ) -> None:
+        """Run backward Dijkstra from the goal area to compute J(x,y) for all free cells.
+
+        The cost-to-go map assigns 0 to the goal area (cells within ``cost_to_go_goal_radius``
+        of the goal cell) and then propagates outward using 8-connected grid steps.
+        """
+        nx, ny = occupancy.shape
+        cost_map = np.full((nx, ny), np.inf, dtype=np.float64)
+
+        radius_cells = int(self.cost_to_go_goal_radius / max(self.grid_resolution, 1e-6))
+        gi, gj = goal_cell
+        goal_cells: List[Tuple[int, int]] = []
+        for di in range(-radius_cells, radius_cells + 1):
+            for dj in range(-radius_cells, radius_cells + 1):
+                ni, nj = gi + di, gj + dj
+                if 0 <= ni < nx and 0 <= nj < ny:
+                    if math.hypot(float(di), float(dj)) <= float(radius_cells) and occupancy[ni, nj] == 0:
+                        cost_map[ni, nj] = 0.0
+                        goal_cells.append((ni, nj))
+
+        if not goal_cells:
+            self.cost_to_go_map = None
+            self.cost_to_go_bounds = None
+            return
+
+        moves = [
+            (-1, 0, 1.0),
+            (1, 0, 1.0),
+            (0, -1, 1.0),
+            (0, 1, 1.0),
+            (-1, -1, math.sqrt(2.0)),
+            (-1, 1, math.sqrt(2.0)),
+            (1, -1, math.sqrt(2.0)),
+            (1, 1, math.sqrt(2.0)),
+        ]
+        heap: List[Tuple[float, Tuple[int, int]]] = [(0.0, cell) for cell in goal_cells]
+        heapq.heapify(heap)
+
+        while heap:
+            cost, (ci, cj) = heapq.heappop(heap)
+            if float(cost) > float(cost_map[ci, cj]) + 1e-12:
+                continue
+            for di, dj, step_cost in moves:
+                ni, nj = ci + di, cj + dj
+                if ni < 0 or ni >= nx or nj < 0 or nj >= ny:
+                    continue
+                if occupancy[ni, nj] != 0:
+                    continue
+                new_cost = float(cost + step_cost)
+                if new_cost + 1e-12 < float(cost_map[ni, nj]):
+                    cost_map[ni, nj] = new_cost
+                    heapq.heappush(heap, (new_cost, (ni, nj)))
+
+        self.cost_to_go_map = cost_map.astype(np.float32)
+        self.cost_to_go_bounds = bounds
+
+    def query_cost_to_go(self, x: float, y: float) -> Optional[float]:
+        """Query the topology cost-to-go J(x,y) at world coordinates.
+
+        Returns ``None`` when the cost-to-go map is unavailable or the query
+        point falls outside the map / inside an obstacle cell.
+        """
+        if self.cost_to_go_map is None or self.cost_to_go_bounds is None:
+            return None
+        xmin, xmax, ymin, ymax = self.cost_to_go_bounds
+        nx, ny = int(self.cost_to_go_map.shape[0]), int(self.cost_to_go_map.shape[1])
+        if float(x) < float(xmin) or float(x) > float(xmax) or float(y) < float(ymin) or float(y) > float(ymax):
+            return None
+
+        grid_x = float(np.clip((float(x) - float(xmin)) / max(self.grid_resolution, 1e-6), 0.0, max(nx - 1, 0)))
+        grid_y = float(np.clip((float(y) - float(ymin)) / max(self.grid_resolution, 1e-6), 0.0, max(ny - 1, 0)))
+        i0 = int(math.floor(grid_x))
+        j0 = int(math.floor(grid_y))
+        i1 = min(i0 + 1, nx - 1)
+        j1 = min(j0 + 1, ny - 1)
+        tx = float(grid_x - i0)
+        ty = float(grid_y - j0)
+
+        weighted_value = 0.0
+        total_weight = 0.0
+        for i, wx in ((i0, 1.0 - tx), (i1, tx)):
+            for j, wy in ((j0, 1.0 - ty), (j1, ty)):
+                weight = float(wx * wy)
+                if weight <= 0.0:
+                    continue
+                val = float(self.cost_to_go_map[i, j])
+                if not np.isfinite(val):
+                    continue
+                weighted_value += weight * val
+                total_weight += weight
+
+        if total_weight <= 1e-9:
+            return None
+        return float(weighted_value / total_weight)
 
     def _astar(
         self,

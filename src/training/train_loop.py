@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import torch
 
@@ -28,6 +28,12 @@ def _metric_from_path(metrics: Dict[str, object], metric_path: str) -> float:
             raise KeyError(f"metric path not found: {metric_path}")
         cursor = cursor[part]
     return float(cursor)
+
+
+def _auto_checkpoint_metric_path(curriculum: SuccessBandCurriculum) -> str:
+    if curriculum.success_band_active() or int(curriculum.level_counts.get(curriculum.target_level, 0)) > 0:
+        return f"levels/{curriculum.target_level}/success_rate"
+    return f"levels/{curriculum.warmup_level}/success_rate"
 
 
 class ExperimentTrainer:
@@ -104,6 +110,21 @@ class ExperimentTrainer:
             extra["evaluation"] = evaluation
         return extra
 
+    def _resolve_checkpoint_metric(self, evaluation: Dict[str, object]) -> Tuple[str, float]:
+        configured_metric = str(self.config.checkpoint.best_metric).strip()
+        candidate_paths = [configured_metric] if configured_metric else ["auto"]
+        if candidate_paths[0].lower() == "auto":
+            candidate_paths = [
+                _auto_checkpoint_metric_path(self.curriculum),
+                "overall/success_rate",
+            ]
+        for metric_path in candidate_paths:
+            try:
+                return metric_path, _metric_from_path(evaluation, metric_path)
+            except KeyError:
+                continue
+        raise KeyError(f"unable to resolve checkpoint metric from {candidate_paths}")
+
     def run(self) -> str:
         pending_episodes = 0
         try:
@@ -144,14 +165,19 @@ class ExperimentTrainer:
 
                 if int(self.config.evaluation.interval) > 0 and (episode_idx + 1) % int(self.config.evaluation.interval) == 0:
                     eval_metrics = self.evaluator.evaluate(self.agent, seed_offset=(episode_idx + 1) * 100)
-                    self.logger.log_evaluation(episode_idx + 1, eval_metrics)
-                    metric_value = _metric_from_path(eval_metrics, self.config.checkpoint.best_metric)
+                    metric_path, metric_value = self._resolve_checkpoint_metric(eval_metrics)
+                    eval_metrics_for_logging = dict(eval_metrics)
+                    eval_metrics_for_logging["checkpoint"] = {"metric_value": float(metric_value)}
+                    self.logger.log_evaluation(episode_idx + 1, eval_metrics_for_logging)
+                    checkpoint_extra = self._checkpoint_extra(eval_metrics)
+                    checkpoint_extra["checkpoint_metric_path"] = str(metric_path)
+                    checkpoint_extra["checkpoint_metric_value"] = float(metric_value)
                     self.checkpoints.maybe_save_best(
                         self.agent,
                         episode_idx + 1,
                         self.update_idx,
                         metric_value,
-                        extra=self._checkpoint_extra(eval_metrics),
+                        extra=checkpoint_extra,
                     )
 
                 if int(self.config.checkpoint.save_interval) > 0 and (episode_idx + 1) % int(self.config.checkpoint.save_interval) == 0:

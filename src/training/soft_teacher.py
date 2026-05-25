@@ -7,6 +7,7 @@ from common.config import VehicleConfig
 from common.runtime_config import BASE_OBSERVATION_FEATURE_DIM, GUIDANCE_FEATURE_DIM, ObservationConfig
 from common.types import ArticulatedState, PrimitiveExecutionContext, PrimitiveRollout, wrap_to_pi
 from env.adapter import UnifiedArticulatedEnvProtocol
+from env.success import ParkingSuccessChecker
 from primitives import ParameterizedPrimitiveExecutor, ParameterizedPrimitiveLibrary, build_proxy_parameter_grid
 
 
@@ -19,13 +20,15 @@ class TeacherAdvice:
 
 
 class CoarseGuidanceSoftTeacher:
-    _EVAL_PREFIX_STEPS = 2
     _MAX_CANDIDATES_PER_ACTION = 6
     _SCORE_TEMPERATURE = 0.35
     _MAX_WEIGHT = 0.65
+    _BASE_ACTIVATION = 0.18
     _COLLISION_PENALTY = 6.0
     _ARTICULATION_LIMIT_PENALTY = 2.5
-    _REVERSE_SWITCH_PENALTY = 0.65
+    _REVERSE_SWITCH_PENALTY = 0.25
+    _STALL_PENALTY = 0.25
+    _ROLLBACK_PENALTY = 0.45
 
     def __init__(
         self,
@@ -40,6 +43,7 @@ class CoarseGuidanceSoftTeacher:
         self.primitive_library = primitive_library
         self.vehicle_config = vehicle_config
         self.observation_config = observation_config
+        self.success_checker = ParkingSuccessChecker(vehicle_config)
         candidate_centers, _candidate_scales, candidate_valid_mask = build_proxy_parameter_grid(
             primitive_library,
             proxy_resolution=2,
@@ -58,17 +62,30 @@ class CoarseGuidanceSoftTeacher:
         lidar = observation[:lidar_dim]
         guidance = observation[-int(GUIDANCE_FEATURE_DIM) :]
         info = self.env.current_info()
-        teacher_weight, diagnostics = self._teacher_weight(lidar=lidar, guidance=guidance, info=info)
+        start_state = self.env.get_articulated_state()
+        current_goal_distance = float(self.env.distance_to_goal(state=start_state))
+        teacher_weight, diagnostics = self._teacher_weight(
+            lidar=lidar,
+            guidance=guidance,
+            info=info,
+            current_goal_distance=current_goal_distance,
+        )
         if teacher_weight <= 0.0:
             return None
 
-        start_state = self.env.get_articulated_state()
         context = self.env.make_primitive_context()
-        reference_heading = self._reference_heading(start_state, guidance)
+        goal_state = self.env.get_goal_state()
+        current_success_metrics = self.success_checker.evaluate(start_state, goal_state, collision_free=True)
+        reference_heading = self._reference_heading(
+            start_state,
+            guidance,
+            goal_heading=float(goal_state.front_heading),
+            current_goal_distance=current_goal_distance,
+        )
         if reference_heading is None:
             return None
 
-        current_goal_distance = float(self.env.distance_to_goal(state=start_state))
+        current_topology_cost = self.env.query_cost_to_go(state=start_state)
         action_scores = np.full((self.primitive_library.action_dim,), -1e9, dtype=np.float32)
         parameter_targets = np.tile(self._default_parameter_vector.reshape(1, -1), (self.primitive_library.action_dim, 1)).astype(np.float32)
 
@@ -88,7 +105,10 @@ class CoarseGuidanceSoftTeacher:
                     action_id=action_id,
                     previous_action_id=previous_action_id,
                     current_goal_distance=current_goal_distance,
+                    current_topology_cost=current_topology_cost,
                     reference_heading=reference_heading,
+                    goal_state=goal_state,
+                    current_success_metrics=current_success_metrics,
                     context=context,
                 )
                 if score > best_score:
@@ -131,7 +151,13 @@ class CoarseGuidanceSoftTeacher:
             yielded.add(token)
             yield candidate
 
-    def _teacher_weight(self, lidar: np.ndarray, guidance: np.ndarray, info: Dict[str, object]) -> Tuple[float, Dict[str, float]]:
+    def _teacher_weight(
+        self,
+        lidar: np.ndarray,
+        guidance: np.ndarray,
+        info: Dict[str, object],
+        current_goal_distance: float,
+    ) -> Tuple[float, Dict[str, float]]:
         if not bool(info.get("guidance_available", False)):
             return 0.0, {"narrow_score": 0.0, "guidance_confidence": 0.0, "guidance_strength": 0.0}
 
@@ -141,27 +167,67 @@ class CoarseGuidanceSoftTeacher:
             return 0.0, {"narrow_score": 0.0, "guidance_confidence": guidance_confidence, "guidance_strength": guidance_strength}
 
         corridor_width = info.get("corridor_width")
-        if corridor_width is not None:
-            narrow_score = float(np.clip((8.0 - float(corridor_width)) / 2.0, 0.0, 1.0))
-        else:
-            min_clearance = 1.0 if lidar.size == 0 else float(np.clip(np.min(lidar), 0.0, 1.0))
-            narrow_score = float(np.clip((0.35 - min_clearance) / 0.20, 0.0, 1.0))
+        narrow_score = self._narrow_score(lidar=lidar, corridor_width=corridor_width)
+        near_goal_factor = float(np.clip(1.0 - current_goal_distance / self._goal_approach_distance(), 0.0, 1.0))
+        teacher_activation = float(np.clip(self._BASE_ACTIVATION + 0.55 * narrow_score + 0.25 * near_goal_factor, 0.0, 1.0))
 
         if str(info.get("level", "")).lower() == "debug":
             narrow_score = 0.0
+            teacher_activation = 0.0
 
-        teacher_weight = float(np.clip(guidance_confidence * guidance_strength * narrow_score, 0.0, self._MAX_WEIGHT))
+        teacher_weight = float(
+            np.clip(
+                self._MAX_WEIGHT * guidance_confidence * guidance_strength * teacher_activation,
+                0.0,
+                self._MAX_WEIGHT,
+            )
+        )
         return teacher_weight, {
             "narrow_score": float(narrow_score),
             "guidance_confidence": guidance_confidence,
             "guidance_strength": guidance_strength,
+            "teacher_activation": float(teacher_activation),
+            "near_goal_factor": float(near_goal_factor),
+            "corridor_width": -1.0 if corridor_width is None else float(corridor_width),
         }
 
-    def _reference_heading(self, start_state: ArticulatedState, guidance: np.ndarray) -> Optional[float]:
+    def _narrow_score(self, lidar: np.ndarray, corridor_width: Optional[object]) -> float:
+        if corridor_width is not None:
+            vehicle_width = max(float(self.vehicle_config.body_width), 1e-6)
+            normalized_clearance = max(float(corridor_width) - vehicle_width, 0.0) / vehicle_width
+            return float(np.clip((1.75 - normalized_clearance) / 1.75, 0.0, 1.0))
+        min_clearance = 1.0 if lidar.size == 0 else float(np.clip(np.min(lidar), 0.0, 1.0))
+        return float(np.clip((0.45 - min_clearance) / 0.25, 0.0, 1.0))
+
+    def _goal_approach_distance(self) -> float:
+        return float(max(float(self.vehicle_config.front_length) + float(self.vehicle_config.rear_length), 8.0))
+
+    def _reference_heading(
+        self,
+        start_state: ArticulatedState,
+        guidance: np.ndarray,
+        goal_heading: Optional[float] = None,
+        current_goal_distance: Optional[float] = None,
+    ) -> Optional[float]:
         direction = np.asarray(guidance[:2], dtype=np.float32)
         if float(np.linalg.norm(direction)) <= 1e-4:
-            return None
-        return wrap_to_pi(float(start_state.front_heading) + float(np.arctan2(direction[1], direction[0])))
+            return None if goal_heading is None else float(goal_heading)
+        guidance_heading = wrap_to_pi(float(start_state.front_heading) + float(np.arctan2(direction[1], direction[0])))
+        if goal_heading is None or current_goal_distance is None:
+            return guidance_heading
+        near_goal_factor = float(np.clip(1.0 - float(current_goal_distance) / self._goal_approach_distance(), 0.0, 1.0))
+        if near_goal_factor <= 1e-4:
+            return guidance_heading
+        return self._blend_heading(guidance_heading, float(goal_heading), near_goal_factor)
+
+    @staticmethod
+    def _blend_heading(primary_heading: float, secondary_heading: float, secondary_weight: float) -> float:
+        blend = float(np.clip(secondary_weight, 0.0, 1.0))
+        x = float((1.0 - blend) * np.cos(primary_heading) + blend * np.cos(secondary_heading))
+        y = float((1.0 - blend) * np.sin(primary_heading) + blend * np.sin(secondary_heading))
+        if abs(x) <= 1e-6 and abs(y) <= 1e-6:
+            return wrap_to_pi(float(primary_heading))
+        return wrap_to_pi(float(np.arctan2(y, x)))
 
     def _score_rollout(
         self,
@@ -170,37 +236,107 @@ class CoarseGuidanceSoftTeacher:
         action_id: int,
         previous_action_id: Optional[int],
         current_goal_distance: float,
+        current_topology_cost: Optional[float],
         reference_heading: float,
+        goal_state: ArticulatedState,
+        current_success_metrics,
         context: PrimitiveExecutionContext,
     ) -> float:
-        prefix_states = rollout.states[1 : min(len(rollout.states), self._EVAL_PREFIX_STEPS + 1)]
-        eval_state = prefix_states[-1] if prefix_states else start_state
-        dx = float(eval_state.x - start_state.x)
-        dy = float(eval_state.y - start_state.y)
-        along_track = float(np.cos(reference_heading) * dx + np.sin(reference_heading) * dy)
-        cross_track = float(-np.sin(reference_heading) * dx + np.cos(reference_heading) * dy)
-        heading_error = abs(wrap_to_pi(float(reference_heading) - float(eval_state.front_heading)))
-        goal_progress = float(current_goal_distance - float(self.env.distance_to_goal(state=eval_state)))
+        scored_states = rollout.states[1:] if len(rollout.states) > 1 else [start_state]
+        eval_state = scored_states[-1]
+        goal_heading = float(context.goal_heading) if context.goal_heading is not None else float(reference_heading)
+        start_goal_heading_error = abs(wrap_to_pi(goal_heading - float(start_state.front_heading)))
+        start_overlap_score = float(0.75 * current_success_metrics.front_overlap_ratio + 0.25 * current_success_metrics.rear_overlap_ratio)
+        best_progress = 0.0
+        terminal_progress = 0.0
+        best_heading_improvement = 0.0
+        terminal_heading_improvement = 0.0
+        best_overlap_progress = 0.0
+        terminal_overlap_progress = 0.0
+        best_cross_track = float("inf")
+        terminal_cross_track = 0.0
+        min_goal_distance = float(current_goal_distance)
+        topology_progress_values = []
+        reached_success = False
+
+        for state_idx, state in enumerate(scored_states):
+            goal_distance = float(self.env.distance_to_goal(state=state))
+            goal_progress = float(current_goal_distance - goal_distance)
+            min_goal_distance = min(min_goal_distance, goal_distance)
+            best_progress = max(best_progress, goal_progress)
+            if state_idx == len(scored_states) - 1:
+                terminal_progress = goal_progress
+
+            goal_heading_error = abs(wrap_to_pi(goal_heading - float(state.front_heading)))
+            heading_improvement = float(start_goal_heading_error - goal_heading_error)
+            best_heading_improvement = max(best_heading_improvement, heading_improvement)
+            if state_idx == len(scored_states) - 1:
+                terminal_heading_improvement = heading_improvement
+
+            state_collision = False if context.collision_checker is None else bool(context.collision_checker(state))
+            success_metrics = self.success_checker.evaluate(state, goal_state, collision_free=(not state_collision))
+            overlap_score = float(0.75 * success_metrics.front_overlap_ratio + 0.25 * success_metrics.rear_overlap_ratio)
+            overlap_progress = float(overlap_score - start_overlap_score)
+            best_overlap_progress = max(best_overlap_progress, overlap_progress)
+            if state_idx == len(scored_states) - 1:
+                terminal_overlap_progress = overlap_progress
+            reached_success = reached_success or bool(success_metrics.success)
+
+            dx = float(state.x - start_state.x)
+            dy = float(state.y - start_state.y)
+            cross_track = abs(float(-np.sin(reference_heading) * dx + np.cos(reference_heading) * dy))
+            best_cross_track = min(best_cross_track, cross_track)
+            if state_idx == len(scored_states) - 1:
+                terminal_cross_track = cross_track
+
+            if current_topology_cost is not None:
+                state_topology_cost = self.env.query_cost_to_go(state=state)
+                if state_topology_cost is not None:
+                    topology_progress_values.append(float(current_topology_cost - state_topology_cost))
+
+        if topology_progress_values:
+            best_progress = max(best_progress, max(0.0, max(topology_progress_values)))
+            terminal_progress = max(terminal_progress, float(topology_progress_values[-1]))
+
         articulation_ratio = max(
-            (abs(float(state.articulation_angle)) / max(float(self.vehicle_config.articulation_limit_rad), 1e-6) for state in (prefix_states or [eval_state])),
+            (abs(float(state.articulation_angle)) / max(float(self.vehicle_config.articulation_limit_rad), 1e-6) for state in scored_states),
             default=0.0,
         )
         collision = bool(rollout.termination_reason == "collision")
         if context.collision_checker is not None:
-            collision = collision or any(bool(context.collision_checker(state)) for state in prefix_states)
+            collision = collision or any(bool(context.collision_checker(state)) for state in scored_states)
 
-        score = 2.5 * goal_progress
-        score += 0.6 * max(along_track, 0.0)
-        score -= 1.1 * abs(cross_track)
-        score -= 0.5 * heading_error
-        score -= 1.2 * max(articulation_ratio - 0.75, 0.0)
-        if along_track < -1e-3:
-            score -= 0.8
+        near_goal_factor = float(
+            np.clip(
+                1.0 - min(float(current_goal_distance), float(min_goal_distance)) / self._goal_approach_distance(),
+                0.0,
+                1.0,
+            )
+        )
+        final_reference_heading_error = abs(wrap_to_pi(float(reference_heading) - float(eval_state.front_heading)))
+        score = 2.4 * best_progress
+        score += 1.6 * terminal_progress
+        score += (0.45 + 1.00 * near_goal_factor) * best_heading_improvement
+        score += (0.25 + 0.75 * near_goal_factor) * terminal_heading_improvement
+        score += (0.35 + 1.10 * near_goal_factor) * best_overlap_progress
+        score += (0.25 + 1.45 * near_goal_factor) * terminal_overlap_progress
+        score += 0.30 * max(float(np.cos(final_reference_heading_error)), 0.0)
+        score -= (0.10 + 0.25 * (1.0 - near_goal_factor)) * terminal_cross_track
+        if np.isfinite(best_cross_track):
+            score -= 0.05 * best_cross_track
+        score -= 1.0 * max(articulation_ratio - 0.78, 0.0)
+        if rollout.travelled_distance <= 0.10 and current_goal_distance > 0.5 * self._goal_approach_distance():
+            score -= self._STALL_PENALTY
+        if float(self.env.distance_to_goal(state=eval_state)) > float(current_goal_distance) + 0.75 and best_progress < 0.20:
+            score -= self._ROLLBACK_PENALTY
+        if reached_success:
+            score += 12.0
+
         if collision:
             score -= self._COLLISION_PENALTY
         if rollout.termination_reason == "articulation_limit":
             score -= self._ARTICULATION_LIMIT_PENALTY
-        if self._is_invalid_reverse_switch(action_id, previous_action_id):
+        if self._is_invalid_reverse_switch(action_id, previous_action_id) and best_progress < 0.20 and terminal_heading_improvement < 0.10:
             score -= self._REVERSE_SWITCH_PENALTY
         return float(score)
 

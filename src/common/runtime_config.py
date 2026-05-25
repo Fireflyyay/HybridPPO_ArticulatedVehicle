@@ -24,6 +24,7 @@ class ObservationConfig:
 @dataclass(frozen=True)
 class RewardConfig:
     progress_weight: float = 8.0
+    distance_weight: float = 2.5
     heading_weight: float = 0.8
     overlap_weight: float = 14.0
     step_penalty: float = -0.05
@@ -31,6 +32,8 @@ class RewardConfig:
     collision_penalty: float = -25.0
     out_of_bounds_penalty: float = -25.0
     timeout_penalty: float = -10.0
+    topology_sigma: float = 8.0
+    near_goal_radius: float = 10.0
 
 
 @dataclass(frozen=True)
@@ -179,13 +182,13 @@ class ProxySafetyConfig:
 class TrainingScheduleConfig:
     total_episodes: int = 35000
     episodes_per_update: int = 128
-    max_macro_steps_per_episode: int = 64
+    max_macro_steps_per_episode: int = 96
     warmup_level: str = "Warmup"
     target_level: str = "Normal"
-    warmup_corridor_convergence_episodes: int = 8000
+    warmup_corridor_convergence_episodes: int = 4000
     curriculum_recent_window: int = 100
-    warmup_min_episodes: int = 10000
-    warmup_mastery_success_rate: float = 0.75
+    warmup_min_episodes: int = 2500
+    warmup_mastery_success_rate: float = 0.25
     target_success_band: Tuple[float, float] = (0.25, 0.60)
     target_focus_prob: float = 0.9
     warmup_bridge_prob: float = 0.5
@@ -208,13 +211,13 @@ class CheckpointConfig:
     save_interval: int = 100
     latest_filename: str = "latest.pt"
     best_filename: str = "best.pt"
-    best_metric: str = "overall/success_rate"
+    best_metric: str = "auto"
 
 
 @dataclass(frozen=True)
 class EvaluationConfig:
     interval: int = 100
-    episodes_per_level: int = 5
+    episodes_per_level: int = 10
     levels: Tuple[str, ...] = ("Debug", "Warmup", "Normal")
     deterministic: bool = True
 

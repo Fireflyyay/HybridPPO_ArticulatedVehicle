@@ -74,8 +74,8 @@ class SuccessCriteriaConfig:
 class ParameterBoundsConfig:
     bounds: Dict[str, Tuple[float, float]] = field(
         default_factory=lambda: {
-            "path_length": (0.3, 8.0),
-            "duration": (0.2, 3.2),
+            "path_length": (0.3, 10.0),
+            "duration": (0.2, 4.0),
             "speed_scale": (0.15, 1.0),
             "omega_scale": (0.05, 1.0),
             "phi_target": (-0.55, 0.55),

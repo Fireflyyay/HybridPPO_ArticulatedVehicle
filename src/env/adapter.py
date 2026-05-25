@@ -34,6 +34,9 @@ class UnifiedArticulatedEnvProtocol(Protocol):
     def distance_to_goal(self, state: Optional[ArticulatedState] = None) -> float:
         ...
 
+    def query_cost_to_go(self, state: Optional[ArticulatedState] = None) -> Optional[float]:
+        ...
+
     def make_primitive_context(self) -> PrimitiveExecutionContext:
         ...
 
@@ -66,6 +69,9 @@ class KinematicTaskAdapter:
 
     def distance_to_goal(self, state: Optional[ArticulatedState] = None) -> float:
         return float(self.env.distance_to_goal(state))
+
+    def query_cost_to_go(self, state: Optional[ArticulatedState] = None) -> Optional[float]:
+        return self.env.query_cost_to_go(state)
 
     def make_primitive_context(self) -> PrimitiveExecutionContext:
         return self.env.make_primitive_context()
