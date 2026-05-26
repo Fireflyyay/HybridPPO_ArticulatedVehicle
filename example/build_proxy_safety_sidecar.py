@@ -5,6 +5,17 @@ from common.runtime_config import ObservationConfig
 from primitives import build_default_primitive_library, build_proxy_safety_sidecar, save_proxy_safety_sidecar
 
 
+def _parse_semantic_proxy_resolution(raw_values):
+    overrides = {}
+    for item in raw_values:
+        text = str(item).strip()
+        semantic_name, separator, resolution_text = text.partition("=")
+        if separator != "=" or not semantic_name.strip() or not resolution_text.strip():
+            raise ValueError(f"invalid semantic proxy resolution override: {text}")
+        overrides[str(semantic_name).strip()] = int(resolution_text)
+    return overrides
+
+
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build an articulation-aware proxy safety sidecar for HybridPPO.")
     parser.add_argument("--output", type=str, required=True)
@@ -12,6 +23,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--lidar-range", type=float, default=30.0)
     parser.add_argument("--articulation-bins", type=int, default=7)
     parser.add_argument("--proxy-resolution", type=int, default=2)
+    parser.add_argument(
+        "--semantic-proxy-resolution",
+        action="append",
+        default=[],
+        help="Repeat semantic=value to densify selected semantics, for example forward-left=4.",
+    )
     parser.add_argument("--max-proxies-per-action", type=int, default=None)
     parser.add_argument("--max-macro-steps", type=int, default=32)
     return parser
@@ -23,6 +40,7 @@ def main() -> str:
     vehicle = VehicleConfig()
     executor = PrimitiveExecutorConfig(max_macro_steps=int(args.max_macro_steps))
     library = build_default_primitive_library()
+    semantic_proxy_resolution = _parse_semantic_proxy_resolution(args.semantic_proxy_resolution)
     sidecar = build_proxy_safety_sidecar(
         library=library,
         vehicle_config=vehicle,
@@ -32,6 +50,7 @@ def main() -> str:
         articulation_bin_count=int(args.articulation_bins),
         proxy_resolution=int(args.proxy_resolution),
         max_proxies_per_action=None if args.max_proxies_per_action is None else int(args.max_proxies_per_action),
+        semantic_proxy_resolution=semantic_proxy_resolution,
     )
     save_proxy_safety_sidecar(str(args.output), sidecar)
     print(str(args.output))

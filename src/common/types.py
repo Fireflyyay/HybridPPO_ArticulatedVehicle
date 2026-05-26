@@ -82,6 +82,9 @@ class MacroTransition:
     teacher_weight: float = 0.0
     proxy_scores: Optional[np.ndarray] = None
     proxy_prefix_lengths: Optional[np.ndarray] = None
+    hard_valid_mask: Optional[np.ndarray] = None
+    execution_valid_mask: Optional[np.ndarray] = None
+    soft_score: Optional[np.ndarray] = None
 
 
 @dataclass

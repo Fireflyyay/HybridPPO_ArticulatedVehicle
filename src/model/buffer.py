@@ -22,6 +22,9 @@ class SMDPBatch:
     teacher_weights: np.ndarray
     proxy_scores: np.ndarray
     proxy_prefix_lengths: np.ndarray
+    hard_valid_masks: np.ndarray
+    execution_valid_masks: np.ndarray
+    soft_scores: np.ndarray
 
 
 class SMDPRolloutBuffer:
@@ -46,6 +49,8 @@ class SMDPRolloutBuffer:
         parameter_dim = self._parameter_dim
         _zero_action = np.zeros((action_dim,), dtype=np.float32)
         _zero_parameter = np.zeros((parameter_dim,), dtype=np.float32)
+        _all_valid = np.ones((action_dim,), dtype=np.bool_)
+        _all_scores = np.ones((action_dim,), dtype=np.float32)
         _proxy_shape = None
         for item in self._items:
             if item.proxy_scores is not None:
@@ -90,6 +95,30 @@ class SMDPRolloutBuffer:
                 [
                     np.zeros(_proxy_shape or (action_dim, 0), dtype=np.float32) if item.proxy_prefix_lengths is None
                     else np.asarray(item.proxy_prefix_lengths, dtype=np.float32)
+                    for item in self._items
+                ],
+                axis=0,
+            ).astype(np.float32),
+            hard_valid_masks=np.stack(
+                [
+                    _all_valid if item.hard_valid_mask is None
+                    else np.asarray(item.hard_valid_mask, dtype=np.bool_).reshape(action_dim)
+                    for item in self._items
+                ],
+                axis=0,
+            ).astype(np.bool_),
+            execution_valid_masks=np.stack(
+                [
+                    _all_valid if item.execution_valid_mask is None
+                    else np.asarray(item.execution_valid_mask, dtype=np.bool_).reshape(action_dim)
+                    for item in self._items
+                ],
+                axis=0,
+            ).astype(np.bool_),
+            soft_scores=np.stack(
+                [
+                    _all_scores if item.soft_score is None
+                    else np.asarray(item.soft_score, dtype=np.float32).reshape(action_dim)
                     for item in self._items
                 ],
                 axis=0,

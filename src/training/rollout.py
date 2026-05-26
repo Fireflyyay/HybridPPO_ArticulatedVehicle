@@ -22,6 +22,82 @@ class EpisodeSummary:
     done_reason: str
     final_goal_distance: float
     last_info: Dict[str, object]
+    action_diagnostics: Dict[str, object]
+
+
+def _mean_scalar(step_diagnostics, key: str) -> Optional[float]:
+    values = [float(item[key]) for item in step_diagnostics if item.get(key) is not None]
+    if len(values) == 0:
+        return None
+    return float(sum(values) / float(len(values)))
+
+
+def _aggregate_action_diagnostics(step_diagnostics) -> Dict[str, object]:
+    if len(step_diagnostics) == 0:
+        return {}
+
+    steps = int(len(step_diagnostics))
+    primitive_counts: Dict[str, int] = {}
+    semantic_counts: Dict[str, int] = {}
+    fallback_trigger_count = 0
+    all_invalid_fallback_count = 0
+    mask_degenerate_count = 0
+    selected_matches_raw_argmax_count = 0
+    selected_matches_semantic_argmax_count = 0
+    selected_action_hard_valid_count = 0
+    selected_stop_check_count = 0
+    selected_articulation_recover_count = 0
+    selected_straight_adjust_count = 0
+
+    for item in step_diagnostics:
+        action_id = int(item.get("selected_action_id", -1))
+        semantic = str(item.get("selected_semantic", "unknown"))
+        primitive_key = f"{action_id}:{semantic}"
+        primitive_counts[primitive_key] = int(primitive_counts.get(primitive_key, 0) + 1)
+        semantic_counts[semantic] = int(semantic_counts.get(semantic, 0) + 1)
+        fallback_trigger_count += int(bool(item.get("fallback_triggered", False)))
+        all_invalid_fallback_count += int(bool(item.get("all_invalid_fallback", False)))
+        mask_degenerate_count += int(int(item.get("selection_mask_positive_count", 0)) <= 0)
+        selected_matches_raw_argmax_count += int(bool(item.get("selected_matches_raw_argmax", False)))
+        selected_matches_semantic_argmax_count += int(bool(item.get("selected_matches_semantic_argmax", False)))
+        selected_action_hard_valid_count += int(bool(item.get("selected_action_hard_valid", False)))
+        selected_stop_check_count += int(semantic == "stop-check")
+        selected_articulation_recover_count += int(semantic == "articulation-recover")
+        selected_straight_adjust_count += int(semantic == "straight-adjust")
+
+    dominant_semantic = max(semantic_counts.items(), key=lambda pair: pair[1])[0]
+    summary: Dict[str, object] = {
+        "steps": int(steps),
+        "dominant_semantic": str(dominant_semantic),
+        "primitive_counts": primitive_counts,
+        "semantic_counts": semantic_counts,
+        "fallback_trigger_rate": float(fallback_trigger_count / float(steps)),
+        "all_invalid_fallback_rate": float(all_invalid_fallback_count / float(steps)),
+        "mask_degenerate_rate": float(mask_degenerate_count / float(steps)),
+        "selected_matches_raw_argmax_rate": float(selected_matches_raw_argmax_count / float(steps)),
+        "selected_matches_semantic_argmax_rate": float(selected_matches_semantic_argmax_count / float(steps)),
+        "selected_action_hard_valid_rate": float(selected_action_hard_valid_count / float(steps)),
+        "selected_stop_check_rate": float(selected_stop_check_count / float(steps)),
+        "selected_articulation_recover_rate": float(selected_articulation_recover_count / float(steps)),
+        "selected_straight_adjust_rate": float(selected_straight_adjust_count / float(steps)),
+    }
+    for metric_key in (
+        "hard_valid_ratio",
+        "soft_score_mean",
+        "soft_score_min",
+        "selected_raw_prob",
+        "selected_prob",
+        "selected_soft_score",
+        "selected_selection_mask",
+        "selected_proxy_action_mask",
+        "selected_semantic_score",
+        "selected_proxy_score_max",
+        "selected_proxy_prefix_max",
+    ):
+        mean_value = _mean_scalar(step_diagnostics, metric_key)
+        if mean_value is not None:
+            summary[f"{metric_key}_mean"] = float(mean_value)
+    return summary
 
 
 class MacroRolloutDriver:
@@ -60,6 +136,7 @@ class MacroRolloutDriver:
         terminated = False
         truncated = False
         previous_action_id: Optional[int] = None
+        action_diagnostics = []
 
         while macro_steps < self.max_macro_steps and not (terminated or truncated):
             context = self.env.make_primitive_context()
@@ -69,7 +146,10 @@ class MacroRolloutDriver:
                 deterministic=deterministic,
                 teacher_action_probs=None if teacher_advice is None else teacher_advice.action_probs,
                 teacher_weight=0.0 if teacher_advice is None else float(teacher_advice.weight),
+                return_diagnostics=True,
             )
+            if selection.diagnostics is not None:
+                action_diagnostics.append(dict(selection.diagnostics))
             next_observation, reward, terminated, truncated, step_info = self.macro_env.step(
                 selection.macro_action,
                 start_state=self.env.get_articulated_state(),
@@ -87,7 +167,7 @@ class MacroRolloutDriver:
             if forced_truncation:
                 truncated = True
                 step_info = dict(step_info)
-                step_info.setdefault("done_reason", "macro_budget")
+                step_info["done_reason"] = "macro_budget"
                 step_info["truncated"] = True
                 step_info["done"] = True
 
@@ -110,6 +190,9 @@ class MacroRolloutDriver:
                         teacher_weight=0.0 if teacher_advice is None else float(teacher_advice.weight),
                         proxy_scores=None if selection.proxy_scores is None else np.asarray(selection.proxy_scores, dtype=np.float32).copy(),
                         proxy_prefix_lengths=None if selection.proxy_prefix_lengths is None else np.asarray(selection.proxy_prefix_lengths, dtype=np.float32).copy(),
+                        hard_valid_mask=None if selection.hard_valid_mask is None else np.asarray(selection.hard_valid_mask, dtype=np.bool_).copy(),
+                        execution_valid_mask=None if selection.execution_valid_mask is None else np.asarray(selection.execution_valid_mask, dtype=np.bool_).copy(),
+                        soft_score=None if selection.soft_score is None else np.asarray(selection.soft_score, dtype=np.float32).copy(),
                     )
                 )
 
@@ -129,4 +212,5 @@ class MacroRolloutDriver:
             done_reason=str(last_info.get("done_reason", "running")),
             final_goal_distance=float(self.env.distance_to_goal()),
             last_info=dict(last_info),
+            action_diagnostics=_aggregate_action_diagnostics(action_diagnostics),
         )

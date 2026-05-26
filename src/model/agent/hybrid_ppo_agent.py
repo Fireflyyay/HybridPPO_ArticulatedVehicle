@@ -26,6 +26,10 @@ class ActionSelection:
     continuous_log_prob: float
     proxy_scores: Optional[np.ndarray] = None
     proxy_prefix_lengths: Optional[np.ndarray] = None
+    hard_valid_mask: Optional[np.ndarray] = None
+    execution_valid_mask: Optional[np.ndarray] = None
+    soft_score: Optional[np.ndarray] = None
+    diagnostics: Optional[Dict[str, object]] = None
 
 
 class HybridPPOAgent:
@@ -73,6 +77,7 @@ class HybridPPOAgent:
         deterministic: bool = False,
         teacher_action_probs: Optional[np.ndarray] = None,
         teacher_weight: float = 0.0,
+        return_diagnostics: bool = False,
     ) -> ActionSelection:
         obs_tensor = self._obs_tensor(observation)
         policy_context = self._masked_policy_context(obs_tensor)
@@ -93,10 +98,32 @@ class HybridPPOAgent:
         parameter_vector = parameters.squeeze(0).detach().cpu().numpy().astype(np.float32)
         proxy_scores = None
         proxy_prefix_lengths = None
+        hard_valid_mask = None
+        execution_valid_mask = None
+        soft_score = None
         if policy_context.get("proxy_scores") is not None:
             proxy_scores = policy_context["proxy_scores"].squeeze(0).detach().cpu().numpy().astype(np.float32).copy()
         if policy_context.get("proxy_prefix_lengths") is not None:
             proxy_prefix_lengths = policy_context["proxy_prefix_lengths"].squeeze(0).detach().cpu().numpy().astype(np.float32).copy()
+        if policy_context.get("hard_valid_mask") is not None:
+            hard_valid_mask = policy_context["hard_valid_mask"].squeeze(0).detach().cpu().numpy().astype(np.bool_).copy()
+        if policy_context.get("execution_valid_mask") is not None:
+            execution_valid_mask = policy_context["execution_valid_mask"].squeeze(0).detach().cpu().numpy().astype(np.bool_).copy()
+        if policy_context.get("soft_score") is not None:
+            soft_score = policy_context["soft_score"].squeeze(0).detach().cpu().numpy().astype(np.float32).copy()
+        diagnostics = None
+        if return_diagnostics:
+            fallback_probs = self._fallback_action_probs(
+                policy_context["raw_logits"],
+                policy_context["state_gate_valid_mask"],
+            )
+            diagnostics = self._selection_diagnostics(
+                observations=obs_tensor,
+                policy_context=policy_context,
+                selection_probs=selection_probs,
+                fallback_probs=fallback_probs,
+                action_ids=action_ids,
+            )
         return ActionSelection(
             macro_action=MacroAction(primitive_id=int(action_ids.item()), parameters=parameter_vector),
             log_prob=float(total_log_prob.item()),
@@ -105,7 +132,124 @@ class HybridPPOAgent:
             continuous_log_prob=float(continuous_log_prob.item()),
             proxy_scores=proxy_scores,
             proxy_prefix_lengths=proxy_prefix_lengths,
+            hard_valid_mask=hard_valid_mask,
+            execution_valid_mask=execution_valid_mask,
+            soft_score=soft_score,
+            diagnostics=diagnostics,
         )
+
+    def _selection_diagnostics(
+        self,
+        observations: torch.Tensor,
+        policy_context: Dict[str, torch.Tensor],
+        selection_probs: torch.Tensor,
+        fallback_probs: torch.Tensor,
+        action_ids: torch.Tensor,
+    ) -> Dict[str, object]:
+        action_id = int(action_ids.item())
+        raw_probs = policy_context["raw_probs"]
+        state_gate_valid_mask = policy_context["state_gate_valid_mask"]
+        network_action_mask = policy_context["network_action_mask"]
+        selection_action_mask = policy_context["selection_action_mask"]
+        proxy_action_mask = policy_context["proxy_action_mask"]
+        semantic_scores = policy_context["semantic_scores"]
+        hard_valid_mask = policy_context["hard_valid_mask"]
+        execution_valid_mask = policy_context["execution_valid_mask"]
+        soft_score = policy_context["soft_score"]
+        all_invalid_fallback = policy_context["all_invalid_fallback"]
+        proxy_action_has_safe_prefix = policy_context["proxy_action_has_safe_prefix"]
+
+        weighted_sum = float((raw_probs * selection_action_mask.to(dtype=raw_probs.dtype)).sum(dim=-1)[0].item())
+
+        raw_argmax_action_id = int(torch.argmax(raw_probs, dim=-1).item())
+        selection_argmax_action_id = int(torch.argmax(selection_probs, dim=-1).item())
+        fallback_argmax_action_id = int(torch.argmax(fallback_probs, dim=-1).item())
+        semantic_argmax_action_id = int(torch.argmax(semantic_scores, dim=-1).item())
+
+        feature_offset = self._base_feature_offset(observations)
+        if feature_offset >= 0 and observations.shape[1] >= feature_offset + self._OBSERVED_FEATURE_DIM:
+            features = observations[0, feature_offset : feature_offset + self._OBSERVED_FEATURE_DIM]
+            goal_distance = float(torch.clamp(features[0], min=0.0).item())
+            relative_heading = float(torch.atan2(features[4], features[3]).item())
+            articulation = float(torch.atan2(features[6], features[5]).item())
+            if feature_offset > 0:
+                min_clearance = float(torch.min(observations[0, :feature_offset]).item())
+            else:
+                min_clearance = 1.0
+        else:
+            goal_distance = 0.0
+            relative_heading = 0.0
+            articulation = 0.0
+            min_clearance = 1.0
+
+        selected_proxy_score_max = None
+        selected_proxy_prefix_max = None
+        if policy_context.get("proxy_scores") is not None:
+            selected_proxy_score_max = float(torch.max(policy_context["proxy_scores"][0, action_id]).item())
+        if policy_context.get("proxy_prefix_lengths") is not None:
+            selected_proxy_prefix_max = float(torch.max(policy_context["proxy_prefix_lengths"][0, action_id]).item())
+
+        soft_score_mean, soft_score_min = self._masked_soft_score_stats(
+            soft_score=soft_score,
+            valid_mask=execution_valid_mask,
+        )
+
+        return {
+            "selected_action_id": int(action_id),
+            "selected_semantic": self._semantic_name(action_id),
+            "raw_argmax_action_id": int(raw_argmax_action_id),
+            "raw_argmax_semantic": self._semantic_name(raw_argmax_action_id),
+            "selection_argmax_action_id": int(selection_argmax_action_id),
+            "selection_argmax_semantic": self._semantic_name(selection_argmax_action_id),
+            "semantic_argmax_action_id": int(semantic_argmax_action_id),
+            "semantic_argmax_semantic": self._semantic_name(semantic_argmax_action_id),
+            "fallback_argmax_action_id": int(fallback_argmax_action_id),
+            "fallback_argmax_semantic": self._semantic_name(fallback_argmax_action_id),
+            "selected_matches_raw_argmax": bool(action_id == raw_argmax_action_id),
+            "selected_matches_selection_argmax": bool(action_id == selection_argmax_action_id),
+            "selected_matches_semantic_argmax": bool(action_id == semantic_argmax_action_id),
+            "selected_matches_fallback_argmax": bool(action_id == fallback_argmax_action_id),
+            "fallback_triggered": bool(all_invalid_fallback[0].item()),
+            "all_invalid_fallback": bool(all_invalid_fallback[0].item()),
+            "weighted_sum": float(weighted_sum),
+            "state_gate_valid_count": int(state_gate_valid_mask[0].to(dtype=torch.int64).sum().item()),
+            "hard_valid_count": int(hard_valid_mask[0].to(dtype=torch.int64).sum().item()),
+            "execution_valid_count": int(execution_valid_mask[0].to(dtype=torch.int64).sum().item()),
+            "hard_valid_ratio": float(hard_valid_mask[0].to(dtype=torch.float32).mean().item()),
+            "network_mask_positive_count": int((network_action_mask[0] > float(self.config.soft_mask_eps)).to(dtype=torch.int64).sum().item()),
+            "selection_mask_positive_count": int((selection_action_mask[0] > float(self.config.soft_mask_eps)).to(dtype=torch.int64).sum().item()),
+            "proxy_safe_action_count": int(proxy_action_has_safe_prefix[0].to(dtype=torch.int64).sum().item()),
+            "selected_raw_prob": float(raw_probs[0, action_id].item()),
+            "selected_prob": float(selection_probs[0, action_id].item()),
+            "selected_fallback_prob": float(fallback_probs[0, action_id].item()),
+            "selected_action_hard_valid": bool(hard_valid_mask[0, action_id].item()),
+            "selected_action_execution_valid": bool(execution_valid_mask[0, action_id].item()),
+            "selected_selection_mask": float(selection_action_mask[0, action_id].item()),
+            "selected_network_mask": float(network_action_mask[0, action_id].item()),
+            "selected_proxy_action_mask": float(proxy_action_mask[0, action_id].item()),
+            "selected_semantic_score": float(semantic_scores[0, action_id].item()),
+            "selected_soft_score": float(soft_score[0, action_id].item()),
+            "soft_score_mean": float(soft_score_mean[0].item()),
+            "soft_score_min": float(soft_score_min[0].item()),
+            "selected_proxy_safe_prefix": bool(proxy_action_has_safe_prefix[0, action_id].item()),
+            "selected_proxy_score_max": selected_proxy_score_max,
+            "selected_proxy_prefix_max": selected_proxy_prefix_max,
+            "selected_fallback_bias": float(self._fallback_action_bias[action_id].item()),
+            "goal_distance_norm": float(goal_distance),
+            "relative_heading_rad": float(relative_heading),
+            "articulation_rad": float(articulation),
+            "min_clearance_norm": float(min_clearance),
+            "raw_probs": raw_probs[0].detach().cpu().numpy().astype(np.float32).copy(),
+            "selection_probs": selection_probs[0].detach().cpu().numpy().astype(np.float32).copy(),
+            "fallback_probs": fallback_probs[0].detach().cpu().numpy().astype(np.float32).copy(),
+            "selection_action_mask": selection_action_mask[0].detach().cpu().numpy().astype(np.float32).copy(),
+            "hard_valid_mask": hard_valid_mask[0].detach().cpu().numpy().astype(np.bool_).copy(),
+            "execution_valid_mask": execution_valid_mask[0].detach().cpu().numpy().astype(np.bool_).copy(),
+            "soft_score": soft_score[0].detach().cpu().numpy().astype(np.float32).copy(),
+        }
+
+    def _semantic_name(self, action_id: int) -> str:
+        return str(self.primitive_library.spec(int(action_id)).semantic.value)
 
     def store_transition(self, transition: MacroTransition) -> None:
         self.buffer.add(transition)
@@ -125,6 +269,8 @@ class HybridPPOAgent:
         teacher_action_probs = torch.as_tensor(batch.teacher_action_probs, dtype=torch.float32, device=self.device)
         teacher_parameter_targets = torch.as_tensor(batch.teacher_parameter_targets, dtype=torch.float32, device=self.device)
         teacher_weights = torch.as_tensor(batch.teacher_weights, dtype=torch.float32, device=self.device)
+        hard_valid_masks = torch.as_tensor(batch.hard_valid_masks, dtype=torch.bool, device=self.device)
+        soft_scores = torch.as_tensor(batch.soft_scores, dtype=torch.float32, device=self.device)
         with torch.no_grad():
             next_values = self.value_net(next_observations).squeeze(-1).cpu().numpy()
         targets = compute_smdp_targets(
@@ -152,6 +298,15 @@ class HybridPPOAgent:
         last_teacher_discrete_loss = 0.0
         last_teacher_parameter_loss = 0.0
         last_teacher_weight = 0.0
+        last_invalid_mass = 0.0
+        last_invalid_loss = 0.0
+        last_joint_safety_mass = 0.0
+        last_selected_action_hard_valid = 1.0
+        last_selected_soft_score = 1.0
+        last_hard_valid_ratio = 1.0
+        last_soft_score_mean = 1.0
+        last_soft_score_min = 1.0
+        last_all_invalid_fallback_rate = 0.0
 
         for _ in range(int(self.config.update_epochs)):
             np.random.shuffle(indices)
@@ -167,6 +322,8 @@ class HybridPPOAgent:
                 teacher_prob_mb = teacher_action_probs[mb]
                 teacher_target_mb = teacher_parameter_targets[mb]
                 teacher_weight_mb = teacher_weights[mb]
+                hard_valid_mask_mb = hard_valid_masks[mb]
+                soft_score_mb = soft_scores[mb]
                 eval_bundle = self._evaluate_action_bundle(
                     observations=obs_mb,
                     action_ids=action_mb,
@@ -179,6 +336,12 @@ class HybridPPOAgent:
                 entropy_c = eval_bundle["continuous_entropy"]
                 safety_loss = eval_bundle["safety_loss"]
                 sampled_safety_score = eval_bundle["sampled_safety_score"]
+                hard_invalid_mass = eval_bundle["hard_invalid_mass"]
+                joint_safety_mass = eval_bundle["joint_safety_mass"]
+                hard_valid_ratio = eval_bundle["hard_valid_ratio"]
+                soft_score_mean = eval_bundle["soft_score_mean"]
+                soft_score_min = eval_bundle["soft_score_min"]
+                all_invalid_fallback = eval_bundle["all_invalid_fallback"]
                 teacher_discrete_loss, teacher_parameter_loss, teacher_weight_mean = self._teacher_guidance_losses(
                     policy_context=eval_bundle["policy_context"],
                     continuous_dist=eval_bundle["continuous_dist"],
@@ -194,6 +357,8 @@ class HybridPPOAgent:
                 actor_loss -= self.config.entropy_coef_discrete * entropy_d.mean()
                 actor_loss -= self.config.entropy_coef_continuous * entropy_c.mean()
                 actor_loss += float(self.config.safety_loss_coef) * safety_loss.mean()
+                invalid_loss = float(self.config.invalid_loss_coef) * hard_invalid_mass.mean()
+                actor_loss += invalid_loss
                 actor_loss += float(self._TEACHER_DISCRETE_LOSS_COEF) * teacher_discrete_loss
                 actor_loss += float(self._TEACHER_PARAMETER_LOSS_COEF) * teacher_parameter_loss
                 predicted_values = self.value_net(obs_mb).squeeze(-1)
@@ -218,6 +383,19 @@ class HybridPPOAgent:
                 last_teacher_discrete_loss = float(teacher_discrete_loss.item())
                 last_teacher_parameter_loss = float(teacher_parameter_loss.item())
                 last_teacher_weight = float(teacher_weight_mean.item())
+                last_invalid_mass = float(hard_invalid_mass.mean().item())
+                last_invalid_loss = float(invalid_loss.item())
+                last_joint_safety_mass = float(joint_safety_mass.mean().item())
+                last_selected_action_hard_valid = float(
+                    hard_valid_mask_mb.to(dtype=torch.float32).gather(1, action_mb.unsqueeze(-1)).mean().item()
+                )
+                last_selected_soft_score = float(
+                    soft_score_mb.gather(1, action_mb.unsqueeze(-1)).mean().item()
+                )
+                last_hard_valid_ratio = float(hard_valid_ratio.mean().item())
+                last_soft_score_mean = float(soft_score_mean.mean().item())
+                last_soft_score_min = float(soft_score_min.mean().item())
+                last_all_invalid_fallback_rate = float(all_invalid_fallback.to(dtype=torch.float32).mean().item())
 
         return {
             "actor_loss": last_actor_loss,
@@ -226,6 +404,15 @@ class HybridPPOAgent:
             "entropy_continuous": last_entropy_c,
             "safety_loss": last_safety_loss,
             "sampled_safety_score": last_sampled_safety_score,
+            "hard_invalid_mass": last_invalid_mass,
+            "invalid_loss": last_invalid_loss,
+            "joint_safety_mass": last_joint_safety_mass,
+            "selected_action_hard_valid": last_selected_action_hard_valid,
+            "selected_soft_score": last_selected_soft_score,
+            "hard_valid_ratio": last_hard_valid_ratio,
+            "soft_score_mean": last_soft_score_mean,
+            "soft_score_min": last_soft_score_min,
+            "all_invalid_fallback_rate": last_all_invalid_fallback_rate,
             "teacher_discrete_kl": last_teacher_discrete_loss,
             "teacher_parameter_loss": last_teacher_parameter_loss,
             "teacher_weight_mean": last_teacher_weight,
@@ -307,6 +494,18 @@ class HybridPPOAgent:
         discrete_log_prob = discrete_dist.log_prob(action_ids)
         continuous_log_prob = continuous_dist.masked_log_prob(parameters, active_mask)
         safety_loss, sampled_safety_score = self._continuous_safety_terms(observations, policy_context, action_ids, parameters)
+        hard_invalid_mass = (
+            policy_context["raw_probs"]
+            * (~policy_context["hard_valid_mask"]).to(dtype=policy_context["raw_probs"].dtype)
+        ).sum(dim=-1)
+        joint_safety_mass = (
+            policy_context["raw_probs"]
+            * (1.0 - torch.clamp(policy_context["soft_score"], min=0.0, max=1.0))
+        ).sum(dim=-1)
+        soft_score_mean, soft_score_min = self._masked_soft_score_stats(
+            soft_score=policy_context["soft_score"],
+            valid_mask=policy_context["execution_valid_mask"],
+        )
         return {
             "policy_context": policy_context,
             "continuous_dist": continuous_dist,
@@ -315,6 +514,12 @@ class HybridPPOAgent:
             "continuous_entropy": continuous_dist.masked_entropy(active_mask),
             "safety_loss": safety_loss,
             "sampled_safety_score": sampled_safety_score,
+            "hard_invalid_mass": hard_invalid_mass,
+            "joint_safety_mass": joint_safety_mass,
+            "hard_valid_ratio": policy_context["hard_valid_mask"].to(dtype=torch.float32).mean(dim=-1),
+            "soft_score_mean": soft_score_mean,
+            "soft_score_min": soft_score_min,
+            "all_invalid_fallback": policy_context["all_invalid_fallback"],
         }
 
     def _selection_probs_from_context(
@@ -411,6 +616,10 @@ class HybridPPOAgent:
         proxy_prefix_lengths_tensor = None
         proxy_action_mask = torch.ones((observations.shape[0], self.primitive_library.action_dim), dtype=torch.float32, device=self.device)
         proxy_action_has_safe_prefix = torch.ones_like(state_gate_valid_mask)
+        semantic_scores = torch.ones_like(proxy_action_mask)
+        all_action_means = None
+        all_action_stds = None
+        network_action_mask = state_gate_valid_mask.to(dtype=proxy_action_mask.dtype)
         if self._soft_mask_enabled():
             self._ensure_proxy_tensors()
             proxy_scores, proxy_prefix_lengths, _articulation_bins = self._query_proxy_scores(observations)
@@ -420,43 +629,69 @@ class HybridPPOAgent:
                 proxy_scores=proxy_scores_tensor,
                 proxy_prefix_lengths=proxy_prefix_lengths_tensor,
             )
+            network_action_mask = proxy_action_mask * state_gate_valid_mask.to(dtype=proxy_action_mask.dtype)
 
-        network_action_mask = proxy_action_mask * state_gate_valid_mask.to(dtype=proxy_action_mask.dtype)
-        selection_action_mask = self._selection_action_mask(
-            proxy_action_mask=proxy_action_mask,
-            proxy_action_has_safe_prefix=proxy_action_has_safe_prefix,
+        if self._soft_mask_enabled() and proxy_scores_tensor is not None:
+            all_action_means, all_action_stds = self._all_action_distribution_moments(
+                observations,
+                action_mask=network_action_mask,
+            )
+            semantic_scores = self._distribution_aware_semantic_scores(
+                all_action_means=all_action_means,
+                all_action_stds=all_action_stds,
+                proxy_scores=proxy_scores_tensor,
+            )
+        parameter_valid_mask = self._parameter_distribution_valid_mask(
+            reference_mask=state_gate_valid_mask,
+            all_action_means=all_action_means,
+            all_action_stds=all_action_stds,
+        )
+        network_action_mask = network_action_mask * parameter_valid_mask.to(dtype=network_action_mask.dtype)
+        hard_valid_mask = torch.logical_and(state_gate_valid_mask, parameter_valid_mask)
+        if self._soft_mask_enabled():
+            hard_valid_mask = torch.logical_and(hard_valid_mask, proxy_action_has_safe_prefix)
+        execution_valid_mask, all_invalid_fallback = self._execution_valid_mask(
+            hard_valid_mask=hard_valid_mask,
             state_gate_valid_mask=state_gate_valid_mask,
+            parameter_valid_mask=parameter_valid_mask,
+        )
+        soft_score = self._execution_soft_score(
+            semantic_scores=semantic_scores,
+            execution_valid_mask=execution_valid_mask,
+            all_invalid_fallback=all_invalid_fallback,
+        )
+        selection_action_mask = self._selection_action_mask(
+            execution_valid_mask=execution_valid_mask,
+            soft_score=soft_score,
         )
         raw_logits = self.policy.discrete_logits(observations, action_mask=network_action_mask)
         raw_probs = torch.softmax(raw_logits, dim=-1)
-        masked_probs = self._reweighted_action_probs(
+        masked_logits = self._execution_logits(
             raw_logits=raw_logits,
-            action_mask=selection_action_mask,
-            state_gate_valid_mask=state_gate_valid_mask,
+            execution_valid_mask=execution_valid_mask,
+            soft_score=soft_score,
         )
+        masked_probs = torch.softmax(masked_logits, dim=-1)
         context = {
             "raw_logits": raw_logits,
             "raw_probs": raw_probs,
-            "masked_logits": self._probs_to_logits(masked_probs),
+            "masked_logits": masked_logits,
             "masked_probs": masked_probs,
-            "semantic_scores": proxy_action_mask,
+            "semantic_scores": semantic_scores,
             "state_gate_valid_mask": state_gate_valid_mask,
+            "hard_valid_mask": hard_valid_mask,
+            "execution_valid_mask": execution_valid_mask,
+            "all_invalid_fallback": all_invalid_fallback,
+            "soft_score": soft_score,
             "network_action_mask": network_action_mask,
             "selection_action_mask": selection_action_mask,
             "proxy_action_mask": proxy_action_mask,
             "proxy_action_has_safe_prefix": proxy_action_has_safe_prefix,
-            "proxy_scores": None,
-            "proxy_prefix_lengths": None,
-            "all_action_means": None,
-            "all_action_stds": None,
+            "proxy_scores": proxy_scores_tensor,
+            "proxy_prefix_lengths": proxy_prefix_lengths_tensor,
+            "all_action_means": all_action_means,
+            "all_action_stds": all_action_stds,
         }
-        if self._soft_mask_enabled():
-            context.update(
-                {
-                    "proxy_scores": proxy_scores_tensor,
-                    "proxy_prefix_lengths": proxy_prefix_lengths_tensor,
-                }
-            )
         return context
 
     def _action_ids_for_semantic(self, semantic: SemanticPrimitive) -> Tuple[int, ...]:
@@ -518,23 +753,94 @@ class HybridPPOAgent:
         action_scores = torch.where(has_safe_prefix, action_scores, torch.zeros_like(action_scores))
         return action_scores, has_safe_prefix
 
-    def _selection_action_mask(
+    def _parameter_distribution_valid_mask(
         self,
-        proxy_action_mask: torch.Tensor,
-        proxy_action_has_safe_prefix: torch.Tensor,
-        state_gate_valid_mask: torch.Tensor,
+        reference_mask: torch.Tensor,
+        all_action_means: Optional[torch.Tensor],
+        all_action_stds: Optional[torch.Tensor],
     ) -> torch.Tensor:
-        gate_weights = state_gate_valid_mask.to(dtype=proxy_action_mask.dtype)
-        if not self._soft_mask_enabled():
-            return gate_weights
-        floor = min(1.0, max(float(self.config.soft_mask_floor), float(self.config.soft_mask_eps)))
-        clipped = torch.clamp(proxy_action_mask, 0.0, 1.0)
-        softened = torch.where(
-            proxy_action_has_safe_prefix,
-            torch.clamp(clipped, min=floor, max=1.0),
+        if all_action_means is None or all_action_stds is None:
+            return torch.ones_like(reference_mask)
+        low = self._low.view(1, 1, -1)
+        high = self._high.view(1, 1, -1)
+        finite = torch.isfinite(all_action_means).all(dim=-1) & torch.isfinite(all_action_stds).all(dim=-1)
+        nonnegative_std = torch.all(all_action_stds >= 0.0, dim=-1)
+        within_low = torch.all(all_action_means >= (low - 1e-6), dim=-1)
+        within_high = torch.all(all_action_means <= (high + 1e-6), dim=-1)
+        return finite & nonnegative_std & within_low & within_high
+
+    def _execution_valid_mask(
+        self,
+        hard_valid_mask: torch.Tensor,
+        state_gate_valid_mask: torch.Tensor,
+        parameter_valid_mask: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        fallback_mask = torch.logical_and(state_gate_valid_mask, parameter_valid_mask)
+        any_hard_valid = torch.any(hard_valid_mask, dim=-1, keepdim=True)
+        any_fallback_valid = torch.any(fallback_mask, dim=-1, keepdim=True)
+        execution_valid_mask = torch.where(any_hard_valid, hard_valid_mask, fallback_mask)
+        execution_valid_mask = torch.where(
+            torch.logical_or(any_hard_valid, any_fallback_valid),
+            execution_valid_mask,
+            torch.ones_like(execution_valid_mask),
+        )
+        return execution_valid_mask, (~any_hard_valid).squeeze(-1)
+
+    def _execution_soft_score(
+        self,
+        semantic_scores: torch.Tensor,
+        execution_valid_mask: torch.Tensor,
+        all_invalid_fallback: torch.Tensor,
+    ) -> torch.Tensor:
+        clipped = torch.clamp(torch.where(torch.isfinite(semantic_scores), semantic_scores, torch.zeros_like(semantic_scores)), 0.0, 1.0)
+        default_soft_score = torch.where(
+            execution_valid_mask,
+            torch.clamp(clipped, min=float(self.config.soft_mask_eps), max=1.0),
             torch.zeros_like(clipped),
         )
-        return softened * gate_weights
+        fallback_soft_score = torch.where(execution_valid_mask, clipped, torch.zeros_like(clipped))
+        fallback_has_signal = torch.any(fallback_soft_score > float(self.config.soft_mask_eps), dim=-1, keepdim=True)
+        fallback_soft_score = torch.where(
+            fallback_has_signal,
+            torch.clamp(fallback_soft_score, min=float(self.config.soft_mask_eps), max=1.0),
+            execution_valid_mask.to(dtype=clipped.dtype),
+        )
+        return torch.where(all_invalid_fallback.unsqueeze(-1), fallback_soft_score, default_soft_score)
+
+    def _selection_action_mask(
+        self,
+        execution_valid_mask: torch.Tensor,
+        soft_score: torch.Tensor,
+    ) -> torch.Tensor:
+        clipped = torch.clamp(soft_score, min=float(self.config.soft_mask_eps), max=1.0)
+        return torch.where(execution_valid_mask, clipped, torch.zeros_like(clipped))
+
+    def _execution_logits(
+        self,
+        raw_logits: torch.Tensor,
+        execution_valid_mask: torch.Tensor,
+        soft_score: torch.Tensor,
+    ) -> torch.Tensor:
+        scale = max(float(self.config.soft_mask_logit_scale), 0.0)
+        masked_logits = raw_logits
+        if scale > 0.0:
+            masked_logits = masked_logits + scale * torch.log(torch.clamp(soft_score, min=float(self.config.soft_mask_eps), max=1.0))
+        blocked_logits = torch.full_like(masked_logits, -1e9)
+        any_valid = torch.any(execution_valid_mask, dim=-1, keepdim=True)
+        masked_logits = torch.where(execution_valid_mask, masked_logits, blocked_logits)
+        return torch.where(any_valid, masked_logits, raw_logits)
+
+    def _masked_soft_score_stats(self, soft_score: torch.Tensor, valid_mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        valid_weights = valid_mask.to(dtype=soft_score.dtype)
+        valid_count = valid_weights.sum(dim=-1)
+        safe_count = torch.clamp(valid_count, min=1.0)
+        masked_sum = (soft_score * valid_weights).sum(dim=-1)
+        mean_score = masked_sum / safe_count
+        masked_min = torch.where(valid_mask, soft_score, torch.ones_like(soft_score)).min(dim=-1).values
+        has_valid = valid_count > 0.0
+        mean_score = torch.where(has_valid, mean_score, torch.ones_like(mean_score))
+        masked_min = torch.where(has_valid, masked_min, torch.ones_like(masked_min))
+        return mean_score, masked_min
 
     def _reweighted_action_probs(
         self,
@@ -570,10 +876,8 @@ class HybridPPOAgent:
         return torch.where(probs > 0.0, safe_logits, zero_logits)
 
     def _action_mask_screening_metrics(self, policy_context: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-        reference_invalid = ~policy_context["state_gate_valid_mask"]
-        if policy_context["proxy_action_has_safe_prefix"] is not None:
-            reference_invalid = torch.logical_or(reference_invalid, ~policy_context["proxy_action_has_safe_prefix"])
-        predicted_invalid = policy_context["selection_action_mask"] <= float(self.config.soft_mask_eps)
+        reference_invalid = ~policy_context["hard_valid_mask"]
+        predicted_invalid = ~policy_context["execution_valid_mask"]
         reference_invalid_f = reference_invalid.to(dtype=policy_context["raw_probs"].dtype)
         return {
             "reference_invalid": reference_invalid,

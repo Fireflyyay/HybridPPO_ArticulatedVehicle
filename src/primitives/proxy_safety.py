@@ -197,24 +197,37 @@ def load_proxy_safety_sidecar(path: str) -> ProxySafetySidecar:
     )
 
 
-def build_proxy_parameter_grid(library, proxy_resolution: int = 2, max_proxies_per_action: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def build_proxy_parameter_grid(
+    library,
+    proxy_resolution: int = 2,
+    max_proxies_per_action: Optional[int] = None,
+    semantic_proxy_resolution: Optional[Mapping[str, int]] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     proxy_resolution = max(1, int(proxy_resolution))
     parameter_dim = int(library.parameter_dim)
+    available_semantics = {str(spec.semantic.value) for spec in library.specs}
+    normalized_resolution: Dict[str, int] = {}
+    for semantic_name, resolution in dict(semantic_proxy_resolution or {}).items():
+        semantic_key = str(semantic_name).strip()
+        if semantic_key not in available_semantics:
+            raise ValueError(f"unknown semantic proxy resolution override: {semantic_key}")
+        normalized_resolution[semantic_key] = max(proxy_resolution, int(resolution))
     per_action_centers = []
     per_action_scales = []
     max_proxy_count = 0
     for spec in library.specs:
+        spec_proxy_resolution = int(normalized_resolution.get(str(spec.semantic.value), proxy_resolution))
         active_indices = set(map(int, library.active_indices(spec.primitive_id).tolist()))
         axis_values = []
         axis_scales = []
         for index, name in enumerate(library.parameter_names):
             low, high = library.bounds[str(name)]
             if index in active_indices:
-                if proxy_resolution == 1:
+                if spec_proxy_resolution == 1:
                     values = np.array([0.5 * (low + high)], dtype=np.float32)
                 else:
-                    values = np.linspace(low, high, proxy_resolution, dtype=np.float32)
-                scale = max(float(high - low) / max(proxy_resolution - 1, 1), 1e-3)
+                    values = np.linspace(low, high, spec_proxy_resolution, dtype=np.float32)
+                scale = max(float(high - low) / max(spec_proxy_resolution - 1, 1), 1e-3)
             else:
                 values = np.array([0.5 * (low + high)], dtype=np.float32)
                 scale = max(float(high - low), 1e-3)
@@ -250,6 +263,7 @@ def build_proxy_safety_sidecar(
     articulation_bin_count: int = 7,
     proxy_resolution: int = 2,
     max_proxies_per_action: Optional[int] = None,
+    semantic_proxy_resolution: Optional[Mapping[str, int]] = None,
 ) -> ProxySafetySidecar:
     from shapely.geometry import LineString, Point
     from shapely.ops import unary_union
@@ -267,6 +281,7 @@ def build_proxy_safety_sidecar(
         library,
         proxy_resolution=proxy_resolution,
         max_proxies_per_action=max_proxies_per_action,
+        semantic_proxy_resolution=semantic_proxy_resolution,
     )
     max_steps = int(executor_config.max_macro_steps)
     required_clearance = np.zeros((articulation_bin_count, library.action_dim, parameter_centers.shape[1], max_steps, lidar_num), dtype=np.float32)
@@ -311,6 +326,7 @@ def build_proxy_safety_sidecar(
     metadata = {
         "articulation_bin_count": int(articulation_bin_count),
         "proxy_resolution": int(proxy_resolution),
+        "semantic_proxy_resolution": {str(key): int(value) for key, value in dict(semantic_proxy_resolution or {}).items()},
         "max_proxies_per_action": None if max_proxies_per_action is None else int(max_proxies_per_action),
         "lidar_num": int(lidar_num),
         "lidar_range": float(lidar_range),

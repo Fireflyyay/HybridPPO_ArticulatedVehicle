@@ -30,3 +30,4 @@ docs/*
 .github
 runs/
 .DS_Store
+/img/*

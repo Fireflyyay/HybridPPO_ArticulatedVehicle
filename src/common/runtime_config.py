@@ -141,6 +141,7 @@ class HybridPPOHyperConfig:
     soft_mask_fallback_bonus: float = 1.5
     continuous_safety_temperature: float = 1.0
     safety_loss_coef: float = 0.0
+    invalid_loss_coef: float = 0.01
 
     def build(self, observation_dim: int, action_dim: int, parameter_dim: int) -> HybridPPOConfig:
         return HybridPPOConfig(
@@ -170,6 +171,7 @@ class HybridPPOHyperConfig:
             soft_mask_fallback_bonus=float(self.soft_mask_fallback_bonus),
             continuous_safety_temperature=float(self.continuous_safety_temperature),
             safety_loss_coef=float(self.safety_loss_coef),
+            invalid_loss_coef=float(self.invalid_loss_coef),
         )
 
 

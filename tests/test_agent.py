@@ -99,6 +99,8 @@ def test_hybrid_agent_action_and_update_smoke():
     metrics = agent.update()
     assert "actor_loss" in metrics
     assert "value_loss" in metrics
+    assert "hard_invalid_mass" in metrics
+    assert "invalid_loss" in metrics
 
 
 def test_hybrid_policy_network_responds_to_action_mask_input():
@@ -150,6 +152,42 @@ def test_distribution_aware_semantic_scores_do_not_reduce_by_proxy_max():
     )
 
     assert float(semantic_scores[0, 0].item()) < float(semantic_scores[0, 1].item())
+
+
+def test_masked_policy_context_uses_distribution_aware_semantic_scores_for_selection():
+    base_library = build_default_primitive_library()
+    library = build_default_primitive_library(proxy_sidecar=_make_proxy_sidecar(base_library))
+    config = HybridPPOConfig(
+        observation_dim=13,
+        action_dim=library.action_dim,
+        parameter_dim=library.parameter_dim,
+        soft_mask_enabled=True,
+    )
+    agent = HybridPPOAgent(config, library)
+
+    def _fake_query_proxy_scores(_observations):
+        proxy_scores = np.zeros((1, library.action_dim, 2), dtype=np.float32)
+        proxy_prefix_lengths = np.ones((1, library.action_dim, 2), dtype=np.float32)
+        proxy_scores[0, 0] = np.array([0.0, 1.0], dtype=np.float32)
+        proxy_scores[0, 1] = np.array([0.45, 0.45], dtype=np.float32)
+        return proxy_scores, proxy_prefix_lengths, np.zeros((1,), dtype=np.int64)
+
+    def _fake_distribution_moments(observations, action_mask=None):
+        del observations, action_mask
+        means = torch.zeros((1, library.action_dim, library.parameter_dim), dtype=torch.float32, device=agent.device)
+        stds = torch.full_like(means, 0.05)
+        means[0, 0, :] = -0.4
+        means[0, 1, :] = 0.0
+        return means, stds
+
+    agent._query_proxy_scores = _fake_query_proxy_scores
+    agent._all_action_distribution_moments = _fake_distribution_moments
+
+    context = agent._masked_policy_context(agent._obs_tensor(np.zeros((13,), dtype=np.float32)))
+
+    assert float(context["proxy_action_mask"][0, 0].item()) > float(context["proxy_action_mask"][0, 1].item())
+    assert float(context["semantic_scores"][0, 0].item()) < float(context["semantic_scores"][0, 1].item())
+    assert float(context["selection_action_mask"][0, 0].item()) < float(context["selection_action_mask"][0, 1].item())
 
 
 def test_reweighted_action_probs_match_manual_soft_mask_formula():
@@ -204,6 +242,98 @@ def test_hybrid_agent_soft_mask_keeps_act_and_evaluate_consistent():
     assert np.isclose(float(total_log_prob.item()), float(selection.log_prob))
     assert float(safety_loss.item()) >= 0.0
     assert 0.0 <= float(sampled_safety_score.item()) <= 1.0
+
+
+def test_hybrid_agent_reports_fallback_diagnostics_when_mask_degenerates():
+    base_library = build_default_primitive_library()
+    library = build_default_primitive_library(proxy_sidecar=_make_proxy_sidecar(base_library))
+    config = HybridPPOConfig(
+        observation_dim=13,
+        action_dim=library.action_dim,
+        parameter_dim=library.parameter_dim,
+        soft_mask_enabled=True,
+    )
+    agent = HybridPPOAgent(config, library)
+    with torch.no_grad():
+        agent.policy.discrete_head.weight.zero_()
+        agent.policy.discrete_head.bias.zero_()
+
+    observation = np.zeros((13,), dtype=np.float32)
+    selection = agent.act(observation, deterministic=True, return_diagnostics=True)
+
+    assert selection.diagnostics is not None
+    assert selection.diagnostics["fallback_triggered"] is True
+    assert selection.diagnostics["all_invalid_fallback"] is True
+    assert selection.diagnostics["selected_action_hard_valid"] is False
+    assert selection.diagnostics["selected_action_execution_valid"] is True
+    assert selection.diagnostics["selection_mask_positive_count"] > 0
+
+
+def test_masked_policy_context_fail_open_keeps_execution_distribution_non_empty():
+    base_library = build_default_primitive_library()
+    library = build_default_primitive_library(proxy_sidecar=_make_proxy_sidecar(base_library))
+    config = HybridPPOConfig(
+        observation_dim=13,
+        action_dim=library.action_dim,
+        parameter_dim=library.parameter_dim,
+        soft_mask_enabled=True,
+    )
+    agent = HybridPPOAgent(config, library)
+
+    observation = np.zeros((13,), dtype=np.float32)
+    context = agent._masked_policy_context(agent._obs_tensor(observation))
+
+    assert not bool(torch.any(context["hard_valid_mask"]).item())
+    assert bool(torch.any(context["execution_valid_mask"]).item())
+    assert bool(context["all_invalid_fallback"][0].item()) is True
+    assert float(context["masked_probs"].sum().item()) == 1.0
+
+
+def test_invalid_mass_loss_reports_raw_invalid_probability_mass():
+    base_library = build_default_primitive_library()
+    library = build_default_primitive_library(proxy_sidecar=_make_proxy_sidecar(base_library))
+    config = HybridPPOConfig(
+        observation_dim=13,
+        action_dim=library.action_dim,
+        parameter_dim=library.parameter_dim,
+        mini_batch_size=1,
+        update_epochs=1,
+        soft_mask_enabled=True,
+        invalid_loss_coef=0.05,
+    )
+    agent = HybridPPOAgent(config, library)
+    with torch.no_grad():
+        agent.policy.discrete_head.weight.zero_()
+        agent.policy.discrete_head.bias.zero_()
+
+    observation = np.zeros((13,), dtype=np.float32)
+    observation[:4] = 0.5
+    observation[9] = 1.0
+    selection = agent.act(observation, deterministic=True)
+    agent.store_transition(
+        MacroTransition(
+            observation=observation,
+            action_id=selection.macro_action.primitive_id,
+            parameters=selection.macro_action.parameters,
+            reward=1.0,
+            tau=1,
+            next_observation=observation.copy(),
+            done=False,
+            log_prob=selection.log_prob,
+            value=selection.value,
+            proxy_scores=selection.proxy_scores,
+            proxy_prefix_lengths=selection.proxy_prefix_lengths,
+            hard_valid_mask=selection.hard_valid_mask,
+            execution_valid_mask=selection.execution_valid_mask,
+            soft_score=selection.soft_score,
+        )
+    )
+
+    metrics = agent.update()
+
+    assert float(metrics["hard_invalid_mass"]) > 0.0
+    assert float(metrics["invalid_loss"]) > 0.0
+    assert float(metrics["selected_action_hard_valid"]) == 1.0
 
 
 def test_action_mask_screening_metrics_have_no_leak_or_false_block_on_proxy_invalid_actions():

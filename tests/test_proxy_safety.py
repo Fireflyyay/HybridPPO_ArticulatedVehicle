@@ -2,7 +2,7 @@ import numpy as np
 
 from common.config import PrimitiveExecutorConfig, VehicleConfig
 from primitives import build_default_primitive_library
-from primitives.proxy_safety import ProxySafetySidecar, build_proxy_safety_sidecar, save_proxy_safety_sidecar
+from primitives.proxy_safety import ProxySafetySidecar, build_proxy_parameter_grid, build_proxy_safety_sidecar, save_proxy_safety_sidecar
 
 
 
@@ -74,6 +74,25 @@ def test_proxy_safety_builder_smoke():
     assert sidecar.required_clearance.shape == (2, library.action_dim, 1, 4, 4)
     assert sidecar.proxy_valid_mask.shape == (library.action_dim, 1)
     assert np.all(sidecar.nominal_horizons >= 1)
+
+
+def test_proxy_parameter_grid_supports_semantic_resolution_override():
+    library = build_default_primitive_library()
+
+    centers, _scales, valid_mask = build_proxy_parameter_grid(
+        library,
+        proxy_resolution=1,
+        semantic_proxy_resolution={"forward-left": 2},
+    )
+
+    forward_left_count = int(valid_mask[0].sum())
+    reverse_align_count = int(valid_mask[4].sum())
+    stop_check_count = int(valid_mask[7].sum())
+
+    assert centers.shape[0] == library.action_dim
+    assert forward_left_count > reverse_align_count
+    assert reverse_align_count == 1
+    assert stop_check_count == 1
 
 
 def test_save_proxy_safety_sidecar_creates_parent_directory(tmp_path):

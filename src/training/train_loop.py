@@ -153,6 +153,7 @@ class ExperimentTrainer:
                         "terminated": float(summary.terminated),
                         "truncated": float(summary.truncated),
                         "final_goal_distance": summary.final_goal_distance,
+                        "action_diagnostics": summary.action_diagnostics,
                         "curriculum": self.curriculum.metrics(),
                     },
                 )

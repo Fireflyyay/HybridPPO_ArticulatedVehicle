@@ -61,6 +61,7 @@ class HybridPPOConfig:
     soft_mask_fallback_bonus: float = 1.5
     continuous_safety_temperature: float = 1.0
     safety_loss_coef: float = 0.0
+    invalid_loss_coef: float = 0.10
 
 
 @dataclass(frozen=True)
