@@ -316,20 +316,42 @@ class CoarseGlobalGuidance:
         self.cost_to_go_bounds = bounds
 
     def query_cost_to_go(self, x: float, y: float) -> Optional[float]:
-        """Query the topology cost-to-go J(x,y) at world coordinates.
+        value, _ = self.query_cost_to_go_details(x, y)
+        return value
 
-        Returns ``None`` when the cost-to-go map is unavailable or the query
-        point falls outside the map / inside an obstacle cell.
+    def query_cost_to_go_details(self, x: float, y: float) -> Tuple[Optional[float], str]:
+        """Query J(x,y) and report whether the value is direct or projected.
+
+        Returns ``(value, "direct")`` for a valid bilinear interpolation,
+        ``(value, "projected")`` when the nearest finite free-cell is used as a
+        fallback, and ``(None, "unavailable")`` when neither is available.
         """
         if self.cost_to_go_map is None or self.cost_to_go_bounds is None:
-            return None
+            return None, "unavailable"
         xmin, xmax, ymin, ymax = self.cost_to_go_bounds
         nx, ny = int(self.cost_to_go_map.shape[0]), int(self.cost_to_go_map.shape[1])
-        if float(x) < float(xmin) or float(x) > float(xmax) or float(y) < float(ymin) or float(y) > float(ymax):
-            return None
+        resolution = max(self.grid_resolution, 1e-6)
+        inside_bounds = bool(float(xmin) <= float(x) <= float(xmax) and float(ymin) <= float(y) <= float(ymax))
 
-        grid_x = float(np.clip((float(x) - float(xmin)) / max(self.grid_resolution, 1e-6), 0.0, max(nx - 1, 0)))
-        grid_y = float(np.clip((float(y) - float(ymin)) / max(self.grid_resolution, 1e-6), 0.0, max(ny - 1, 0)))
+        if inside_bounds:
+            grid_x = float(np.clip((float(x) - float(xmin)) / resolution, 0.0, max(nx - 1, 0)))
+            grid_y = float(np.clip((float(y) - float(ymin)) / resolution, 0.0, max(ny - 1, 0)))
+            value = self._query_cost_to_go_grid(grid_x, grid_y)
+            if value is not None:
+                return value, "direct"
+        else:
+            grid_x = float(np.clip((float(x) - float(xmin)) / resolution, 0.0, max(nx - 1, 0)))
+            grid_y = float(np.clip((float(y) - float(ymin)) / resolution, 0.0, max(ny - 1, 0)))
+
+        projected_value = self._project_cost_to_go_to_nearest_valid_cell(grid_x, grid_y)
+        if projected_value is not None:
+            return projected_value, "projected"
+        return None, "unavailable"
+
+    def _query_cost_to_go_grid(self, grid_x: float, grid_y: float) -> Optional[float]:
+        if self.cost_to_go_map is None:
+            return None
+        nx, ny = int(self.cost_to_go_map.shape[0]), int(self.cost_to_go_map.shape[1])
         i0 = int(math.floor(grid_x))
         j0 = int(math.floor(grid_y))
         i1 = min(i0 + 1, nx - 1)
@@ -353,6 +375,36 @@ class CoarseGlobalGuidance:
         if total_weight <= 1e-9:
             return None
         return float(weighted_value / total_weight)
+
+    def _project_cost_to_go_to_nearest_valid_cell(self, grid_x: float, grid_y: float) -> Optional[float]:
+        if self.cost_to_go_map is None:
+            return None
+        nx, ny = int(self.cost_to_go_map.shape[0]), int(self.cost_to_go_map.shape[1])
+        center_i = int(round(float(np.clip(grid_x, 0.0, max(nx - 1, 0)))))
+        center_j = int(round(float(np.clip(grid_y, 0.0, max(ny - 1, 0)))))
+        max_radius = max(nx, ny)
+
+        for radius in range(max_radius + 1):
+            best_value = None
+            best_dist2 = float("inf")
+            i0 = max(0, center_i - radius)
+            i1 = min(nx - 1, center_i + radius)
+            j0 = max(0, center_j - radius)
+            j1 = min(ny - 1, center_j + radius)
+            for i in range(i0, i1 + 1):
+                for j in range(j0, j1 + 1):
+                    if radius > 0 and abs(i - center_i) < radius and abs(j - center_j) < radius:
+                        continue
+                    value = float(self.cost_to_go_map[i, j])
+                    if not np.isfinite(value):
+                        continue
+                    dist2 = float((float(i) - grid_x) ** 2 + (float(j) - grid_y) ** 2)
+                    if dist2 + 1e-12 < best_dist2:
+                        best_dist2 = dist2
+                        best_value = value
+            if best_value is not None:
+                return float(best_value)
+        return None
 
     def _astar(
         self,

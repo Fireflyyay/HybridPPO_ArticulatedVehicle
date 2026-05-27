@@ -34,6 +34,7 @@ class RewardConfig:
     timeout_penalty: float = -10.0
     topology_sigma: float = 8.0
     near_goal_radius: float = 10.0
+    reverse_penalty_coef: float = 0.2
 
 
 @dataclass(frozen=True)

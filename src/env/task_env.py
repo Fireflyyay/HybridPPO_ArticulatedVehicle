@@ -25,6 +25,10 @@ class TaskStepResult:
 
 
 class KinematicTaskEnv:
+    _PROJECTED_TOPOLOGY_WEIGHT_SCALE = 0.60
+    _CLEARANCE_DISTANCE_WEIGHT_SCALE = 0.35
+    _EUCLIDEAN_DISTANCE_WEIGHT_SCALE = 0.20
+
     def __init__(
         self,
         scene_factory: BaselineInspiredSceneFactory,
@@ -61,6 +65,8 @@ class KinematicTaskEnv:
         self._last_info: Dict[str, object] = {}
         self._global_guidance = CoarseGlobalGuidance()
         self._guidance_available = False
+        self._best_rewarded_topology_cost: Optional[float] = None
+        self._best_rewarded_goal_distance: Optional[float] = None
 
     @property
     def observation_dim(self) -> int:
@@ -83,6 +89,9 @@ class KinematicTaskEnv:
             start_xy=(float(self._state.x), float(self._state.y)),
             goal_xy=(float(self._goal_state.x), float(self._goal_state.y)),
         )
+        initial_topology_cost, _ = self._global_guidance.query_cost_to_go_details(float(self._state.x), float(self._state.y))
+        self._best_rewarded_topology_cost = None if initial_topology_cost is None else float(initial_topology_cost)
+        self._best_rewarded_goal_distance = float(self.distance_to_goal(self._state))
         self._step_count = 0
         self._last_info = self._build_info(
             collision=False,
@@ -227,19 +236,15 @@ class KinematicTaskEnv:
         out_of_bounds: bool,
         success: bool,
         timeout: bool,
-    ) -> Tuple[float, Dict[str, float]]:
-        # Topology-aware progress: coarse A* cost-to-go delta replaces Euclidean distance.
-        j_prev = self._global_guidance.query_cost_to_go(float(previous_state.x), float(previous_state.y))
-        j_next = self._global_guidance.query_cost_to_go(float(next_state.x), float(next_state.y))
+    ) -> Tuple[float, Dict[str, object]]:
         previous_goal_distance = float(np.hypot(float(self._goal_state.x - previous_state.x), float(self._goal_state.y - previous_state.y)))
         current_goal_distance = float(np.hypot(float(self._goal_state.x - next_state.x), float(self._goal_state.y - next_state.y)))
         distance_progress = float(previous_goal_distance - current_goal_distance)
-        if j_prev is not None and j_next is not None:
-            delta_j = float(j_prev - j_next)
-            topology_progress = float(math.tanh(delta_j / max(float(self.reward_config.topology_sigma), 1e-6)))
-        else:
-            delta_j = 0.0
-            topology_progress = 0.0
+        topology_progress, delta_j, progress_weight, progress_source, clearance_factor = self._progress_reward(
+            previous_state=previous_state,
+            next_state=next_state,
+            current_goal_distance=current_goal_distance,
+        )
         previous_heading_error = abs(wrap_to_pi(float(self._goal_state.front_heading) - float(previous_state.front_heading))) / np.pi
         current_heading_error = abs(wrap_to_pi(float(self._goal_state.front_heading) - float(next_state.front_heading))) / np.pi
         heading_progress = previous_heading_error - current_heading_error
@@ -251,7 +256,7 @@ class KinematicTaskEnv:
         shaped_heading_weight = float(self.reward_config.heading_weight) * float(1.0 + 0.5 * near_goal_factor)
         shaped_overlap_weight = float(self.reward_config.overlap_weight) * float(1.0 + near_goal_factor)
         reward = float(self.reward_config.step_penalty)
-        reward += float(self.reward_config.progress_weight) * float(topology_progress)
+        reward += float(progress_weight) * float(topology_progress)
         reward += float(self.reward_config.distance_weight) * float(near_goal_factor) * float(distance_progress)
         reward += float(shaped_heading_weight) * float(heading_progress)
         reward += float(shaped_overlap_weight) * float(overlap_progress)
@@ -268,6 +273,7 @@ class KinematicTaskEnv:
         return float(reward), {
             "topology_progress": float(topology_progress),
             "topology_delta_j": float(delta_j),
+            "progress_weight": float(progress_weight),
             "distance_progress": float(distance_progress),
             "near_goal_factor": float(near_goal_factor),
             "heading_progress": float(heading_progress),
@@ -277,9 +283,100 @@ class KinematicTaskEnv:
             "distance_weight": float(self.reward_config.distance_weight),
             "heading_weight": float(shaped_heading_weight),
             "overlap_weight": float(shaped_overlap_weight),
+            "clearance_factor": float(clearance_factor),
             "step_penalty": float(self.reward_config.step_penalty),
             "terminal_bonus": float(terminal_bonus),
+            "progress_source": str(progress_source),
         }
+
+    def _progress_reward(
+        self,
+        previous_state: ArticulatedState,
+        next_state: ArticulatedState,
+        current_goal_distance: float,
+    ) -> Tuple[float, float, float, str, float]:
+        base_weight = float(self.reward_config.progress_weight)
+        reverse_coef = float(self.reward_config.reverse_penalty_coef)
+        sigma = max(float(self.reward_config.topology_sigma), 1e-6)
+        j_prev, prev_mode = self._global_guidance.query_cost_to_go_details(float(previous_state.x), float(previous_state.y))
+        j_next, next_mode = self._global_guidance.query_cost_to_go_details(float(next_state.x), float(next_state.y))
+        if j_prev is not None and j_next is not None:
+            if self._best_rewarded_topology_cost is None:
+                self._best_rewarded_topology_cost = float(j_prev)
+            best_topology_cost = min(float(self._best_rewarded_topology_cost), float(j_prev))
+            frontier_delta = max(0.0, best_topology_cost - float(j_next))
+            if float(j_next) + 1e-9 < best_topology_cost:
+                self._best_rewarded_topology_cost = float(j_next)
+            raw_delta_j = float(j_prev - j_next)
+            forward = float(math.tanh(frontier_delta / sigma))
+            regression = float(reverse_coef * min(0.0, float(math.tanh(raw_delta_j / sigma))))
+            topology_progress = forward + regression
+            weight_scale = (
+                1.0
+                if prev_mode == "direct" and next_mode == "direct"
+                else float(self._PROJECTED_TOPOLOGY_WEIGHT_SCALE)
+            )
+            progress_source = "topology" if weight_scale >= 1.0 else "projected_topology"
+            return topology_progress, float(raw_delta_j), base_weight * weight_scale, progress_source, 1.0
+
+        previous_goal_distance = float(self.distance_to_goal(previous_state))
+        raw_distance_delta = float(previous_goal_distance - current_goal_distance)
+        distance_frontier = self._distance_frontier_improvement(current_goal_distance)
+        regression = float(reverse_coef * min(0.0, raw_distance_delta / sigma))
+        clearance_factor = self._local_clearance_factor(next_state)
+        if clearance_factor is not None:
+            forward = float(distance_frontier * clearance_factor)
+            topology_progress = forward + float(regression * clearance_factor)
+            return (
+                float(topology_progress),
+                0.0,
+                base_weight * float(self._CLEARANCE_DISTANCE_WEIGHT_SCALE),
+                "clearance_distance",
+                float(clearance_factor),
+            )
+        forward = float(distance_frontier)
+        topology_progress = forward + regression
+        return (
+            float(topology_progress),
+            0.0,
+            base_weight * float(self._EUCLIDEAN_DISTANCE_WEIGHT_SCALE),
+            "euclidean_distance",
+            1.0,
+        )
+
+    def _distance_frontier_improvement(self, current_goal_distance: float) -> float:
+        if self._best_rewarded_goal_distance is None:
+            self._best_rewarded_goal_distance = float(current_goal_distance)
+            return 0.0
+        best_goal_distance = float(self._best_rewarded_goal_distance)
+        improvement = max(0.0, best_goal_distance - float(current_goal_distance))
+        if float(current_goal_distance) + 1e-9 < best_goal_distance:
+            self._best_rewarded_goal_distance = float(current_goal_distance)
+        return float(improvement)
+
+    def _local_clearance_factor(self, state: ArticulatedState) -> Optional[float]:
+        if self._scene is None:
+            return None
+        lidar_norm = np.asarray(self._lidar_observation(state), dtype=np.float64).reshape(-1)
+        if lidar_norm.size == 0:
+            return None
+        lidar_range = float(self.observation_config.lidar_max_range)
+        lidar_values = np.clip(lidar_norm, 0.0, 1.0) * lidar_range
+        min_lidar = float(np.min(lidar_values))
+        dense_ratio = float(np.mean(lidar_values < float(self._global_guidance.near_obs_dist_m)))
+        clear_span = max(1e-6, float(self._global_guidance.full_clearance_m) - float(self._global_guidance.min_clearance_m))
+        clear_factor = float(
+            np.clip((min_lidar - float(self._global_guidance.min_clearance_m)) / clear_span, 0.0, 1.0)
+        )
+        dense_factor = float(
+            1.0
+            - np.clip(
+                dense_ratio / max(1e-6, float(self._global_guidance.max_dense_ratio)),
+                0.0,
+                1.0,
+            )
+        )
+        return float(np.clip(clear_factor * dense_factor, 0.0, 1.0))
 
     def _build_info(
         self,
@@ -288,7 +385,7 @@ class KinematicTaskEnv:
         terminated: bool,
         truncated: bool,
         done_reason: str,
-        reward_info: Dict[str, float],
+        reward_info: Dict[str, object],
         success_metrics=None,
     ) -> Dict[str, object]:
         scene_metadata = {} if self._scene is None else dict(self._scene.metadata)
