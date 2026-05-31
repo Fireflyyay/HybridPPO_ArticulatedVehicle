@@ -67,6 +67,12 @@ class KinematicTaskEnv:
         self._guidance_available = False
         self._best_rewarded_topology_cost: Optional[float] = None
         self._best_rewarded_goal_distance: Optional[float] = None
+        self._initial_topology_cost: Optional[float] = None
+        self._best_rewarded_stage_potential: Optional[float] = None
+        self._active_reference_goal_position: Optional[Tuple[float, float]] = None
+        self._active_reference_goal_heading: Optional[float] = None
+        self._reference_override_goal_position: Optional[Tuple[float, float]] = None
+        self._reference_override_goal_heading: Optional[float] = None
 
     @property
     def observation_dim(self) -> int:
@@ -89,10 +95,20 @@ class KinematicTaskEnv:
             start_xy=(float(self._state.x), float(self._state.y)),
             goal_xy=(float(self._goal_state.x), float(self._goal_state.y)),
         )
+        self.clear_reference_override()
+        self._set_active_reference(
+            goal_position=(float(self._goal_state.x), float(self._goal_state.y)),
+            goal_heading=float(self._goal_state.front_heading),
+        )
         initial_topology_cost, _ = self._global_guidance.query_cost_to_go_details(float(self._state.x), float(self._state.y))
         self._best_rewarded_topology_cost = None if initial_topology_cost is None else float(initial_topology_cost)
+        self._initial_topology_cost = None if initial_topology_cost is None else float(initial_topology_cost)
         self._best_rewarded_goal_distance = float(self.distance_to_goal(self._state))
+        initial_stage = self._stage_potential(self._state)
+        self._best_rewarded_stage_potential = None if initial_stage is None else float(initial_stage["total"])
         self._step_count = 0
+        initial_lidar = self._lidar_observation(self._state)
+        start_min_lidar_norm = float(np.min(initial_lidar)) if len(initial_lidar) > 0 else 1.0
         self._last_info = self._build_info(
             collision=False,
             goal_reached=False,
@@ -101,6 +117,7 @@ class KinematicTaskEnv:
             done_reason="reset",
             reward_info={},
         )
+        self._last_info["start_min_lidar_norm"] = float(start_min_lidar_norm)
         return self.build_observation(), dict(self._last_info)
 
     def step(self, action: np.ndarray):
@@ -216,12 +233,210 @@ class KinematicTaskEnv:
         return self._global_guidance.query_cost_to_go(float(current.x), float(current.y))
 
     def make_primitive_context(self) -> PrimitiveExecutionContext:
-        goal = self.get_goal_state()
+        goal_position, goal_heading = self._reference_target(self.get_articulated_state())
+        self._set_active_reference(goal_position=goal_position, goal_heading=goal_heading)
         return PrimitiveExecutionContext(
-            goal_position=(float(goal.x), float(goal.y)),
-            goal_heading=float(goal.front_heading),
+            goal_position=goal_position,
+            goal_heading=goal_heading,
             collision_checker=self.predict_collision,
         )
+
+    def set_reference_override(self, goal_position, goal_heading: float) -> None:
+        self._reference_override_goal_position = (float(goal_position[0]), float(goal_position[1]))
+        self._reference_override_goal_heading = float(goal_heading)
+
+    def clear_reference_override(self) -> None:
+        self._reference_override_goal_position = None
+        self._reference_override_goal_heading = None
+
+    def _set_active_reference(self, goal_position: Tuple[float, float], goal_heading: float) -> None:
+        self._active_reference_goal_position = (float(goal_position[0]), float(goal_position[1]))
+        self._active_reference_goal_heading = float(goal_heading)
+
+    def _reference_target(self, state: ArticulatedState) -> Tuple[Tuple[float, float], float]:
+        if self._reference_override_goal_position is not None and self._reference_override_goal_heading is not None:
+            return self._reference_override_goal_position, float(self._reference_override_goal_heading)
+
+        if bool(self.env_config.escape_reference_enabled):
+            local_reference = self._escape_reference_target(state)
+            if local_reference is not None:
+                return local_reference
+
+        if bool(self.env_config.phase_reference_enabled):
+            phase_reference = self._phase_reference_target(state)
+            if phase_reference is not None:
+                return phase_reference
+
+        goal = self.get_goal_state()
+        return (float(goal.x), float(goal.y)), float(goal.front_heading)
+
+    def _phase_reference_target(self, state: ArticulatedState) -> Optional[Tuple[Tuple[float, float], float]]:
+        guidance_ref = self._guidance_reference(state)
+        if guidance_ref is None:
+            return None
+        target_pos, target_heading, progress_m = guidance_ref
+        if self._is_docking_phase(state, progress_m, target_heading):
+            goal = self.get_goal_state()
+            return (float(goal.x), float(goal.y)), float(goal.front_heading)
+        return target_pos, target_heading
+
+    def _is_docking_phase(self, state: ArticulatedState, progress_m: float, tangent_heading: float) -> bool:
+        path_s = self._global_guidance.path_s
+        if path_s is None or len(path_s) == 0:
+            return False
+        total_path_m = float(path_s[-1])
+        if total_path_m < 1e-6:
+            return False
+        if progress_m / total_path_m < 0.9:
+            return False
+        goal_distance = self.distance_to_goal(state)
+        near_goal_threshold = float(self.reward_config.near_goal_radius) * 1.5
+        if goal_distance > near_goal_threshold:
+            return False
+        goal = self.get_goal_state()
+        heading_diff = abs(wrap_to_pi(tangent_heading - float(goal.front_heading)))
+        if heading_diff > math.radians(30.0):
+            return False
+        return True
+
+    def _escape_reference_target(self, state: ArticulatedState) -> Optional[Tuple[Tuple[float, float], float]]:
+        if not bool(self._guidance_available):
+            return None
+        guidance_reference = self._guidance_reference(state, lookahead_override_m=self._escape_progress_radius_m())
+        if guidance_reference is None:
+            return None
+        goal_position, goal_heading, progress_m = guidance_reference
+        if not self._use_escape_reference(state, progress_m):
+            return None
+        return goal_position, goal_heading
+
+    def _guidance_reference(
+        self,
+        state: ArticulatedState,
+        lookahead_override_m: Optional[float] = None,
+    ) -> Optional[Tuple[Tuple[float, float], float, float]]:
+        path_points = self._global_guidance.path_points_world
+        path_s = self._global_guidance.path_s
+        if path_points is None or path_s is None or len(path_points) < 2:
+            return None
+
+        point = np.array([float(state.x), float(state.y)], dtype=np.float64)
+        lo = int(max(0, self._global_guidance.progress_idx - 2))
+        hi = int(min(len(path_points), self._global_guidance.progress_idx + self._global_guidance.progress_search_window + 1))
+        segment = path_points[lo:hi]
+        if len(segment) == 0:
+            segment = path_points
+            lo = 0
+
+        d2 = np.sum((segment - point) ** 2, axis=1)
+        best_local_idx = int(np.argmin(d2))
+        best_idx = int(max(self._global_guidance.progress_idx, lo + best_local_idx))
+        self._global_guidance.progress_idx = best_idx
+
+        progress_m = float(path_s[best_idx])
+        path_end_m = float(path_s[-1])
+        lookahead_m = self._guidance_lookahead_m(state)
+        if lookahead_override_m is not None:
+            lookahead_m = float(min(float(lookahead_m), max(float(lookahead_override_m), 0.0)))
+        target_s = float(min(progress_m + lookahead_m, path_end_m))
+        target_point = self._global_guidance._interp_on_path(target_s)
+        if target_point is None:
+            return None
+
+        current_point = self._global_guidance._interp_on_path(progress_m)
+        heading_vector = None
+        if lookahead_override_m is None:
+            half_window = 2.0 * float(self._global_guidance.grid_resolution)
+            s0 = max(progress_m - half_window, 0.0)
+            s1 = min(progress_m + half_window, path_end_m)
+            p0 = self._global_guidance._interp_on_path(s0)
+            p1 = self._global_guidance._interp_on_path(s1)
+            if p0 is not None and p1 is not None and float(s1 - s0) > 1e-6:
+                heading_vector = np.asarray(p1, dtype=np.float64) - np.asarray(p0, dtype=np.float64)
+            else:
+                heading_probe = self._global_guidance._interp_on_path(
+                    float(min(progress_m + self._global_guidance.grid_resolution, path_end_m))
+                )
+                if heading_probe is not None:
+                    heading_vector = np.asarray(heading_probe, dtype=np.float64) - np.asarray(current_point, dtype=np.float64)
+        if heading_vector is None or float(np.linalg.norm(heading_vector)) < 1e-6:
+            if current_point is not None:
+                heading_vector = np.asarray(target_point, dtype=np.float64) - np.asarray(current_point, dtype=np.float64)
+            else:
+                heading_vector = None
+        if heading_vector is None or float(np.linalg.norm(heading_vector)) < 1e-6:
+            next_idx = min(best_idx + 1, len(path_points) - 1)
+            prev_idx = max(best_idx - 1, 0)
+            heading_vector = np.asarray(path_points[next_idx], dtype=np.float64) - np.asarray(path_points[prev_idx], dtype=np.float64)
+        if float(np.linalg.norm(heading_vector)) < 1e-6:
+            return None
+
+        goal_heading = float(math.atan2(float(heading_vector[1]), float(heading_vector[0])))
+        return (float(target_point[0]), float(target_point[1])), goal_heading, progress_m
+
+    def _guidance_lookahead_m(self, state: ArticulatedState) -> float:
+        lookahead = float(self._global_guidance.lookahead_base + self._global_guidance.lookahead_speed_gain * abs(float(state.speed)))
+        return float(np.clip(lookahead, self._global_guidance.lookahead_min, self._global_guidance.lookahead_max))
+
+    def _use_escape_reference(self, state: ArticulatedState, progress_m: float) -> bool:
+        if self._scene is None:
+            return False
+        start = self._scene.start_state
+        start_displacement = float(np.hypot(float(state.x - start.x), float(state.y - start.y)))
+        escape_progress_m = self._escape_progress_radius_m()
+        extended_escape_progress_m = 1.5 * escape_progress_m
+        min_clearance = self._min_clearance_m(state)
+        clearance_trigger = float(max(self._global_guidance.near_obs_dist_m, 0.5 * float(self.vehicle_config.body_width) + 0.35))
+        low_clearance = min_clearance is not None and float(min_clearance) <= clearance_trigger
+        near_start = bool(start_displacement <= escape_progress_m or progress_m <= escape_progress_m)
+        extended_near_start = bool(start_displacement <= extended_escape_progress_m or progress_m <= extended_escape_progress_m)
+        return bool(near_start or (low_clearance and extended_near_start))
+
+    def _escape_progress_radius_m(self) -> float:
+        return float(max(float(self.vehicle_config.front_length) + 0.5 * float(self.vehicle_config.rear_length), 2.0))
+
+    def _min_clearance_m(self, state: ArticulatedState) -> Optional[float]:
+        if self._scene is None:
+            return None
+        lidar_norm = np.asarray(self._lidar_observation(state), dtype=np.float64).reshape(-1)
+        if lidar_norm.size == 0:
+            return None
+        return float(np.min(lidar_norm)) * max(float(self.observation_config.lidar_max_range), 1e-6)
+
+    def _path_progress_m(self, state: ArticulatedState) -> Optional[float]:
+        path_points = self._global_guidance.path_points_world
+        path_s = self._global_guidance.path_s
+        if path_points is None or path_s is None or len(path_points) < 2:
+            return None
+
+        point = np.array([float(state.x), float(state.y)], dtype=np.float64)
+        lo = int(max(0, self._global_guidance.progress_idx - 2))
+        hi = int(min(len(path_points), self._global_guidance.progress_idx + self._global_guidance.progress_search_window + 1))
+        if hi - lo < 2:
+            lo = 0
+            hi = len(path_points)
+
+        best_dist2 = float("inf")
+        best_s = float(path_s[lo])
+        for idx in range(lo, hi - 1):
+            seg_start = np.asarray(path_points[idx], dtype=np.float64)
+            seg_end = np.asarray(path_points[idx + 1], dtype=np.float64)
+            seg_vec = seg_end - seg_start
+            seg_len2 = float(np.dot(seg_vec, seg_vec))
+            if seg_len2 < 1e-12:
+                proj_dist2 = float(np.sum((point - seg_start) ** 2))
+                if proj_dist2 < best_dist2:
+                    best_dist2 = proj_dist2
+                    best_s = float(path_s[idx])
+                continue
+            t = float(np.dot(point - seg_start, seg_vec) / seg_len2)
+            t = float(np.clip(t, 0.0, 1.0))
+            proj_point = seg_start + t * seg_vec
+            proj_dist2 = float(np.sum((point - proj_point) ** 2))
+            if proj_dist2 < best_dist2:
+                best_dist2 = proj_dist2
+                best_s = float(path_s[idx] + t * (float(path_s[idx + 1]) - float(path_s[idx])))
+        return float(best_s)
 
     def predict_collision(self, state: ArticulatedState) -> bool:
         return bool(self._intersects_obstacles(state) or self._is_out_of_bounds(state))
@@ -245,8 +460,11 @@ class KinematicTaskEnv:
             next_state=next_state,
             current_goal_distance=current_goal_distance,
         )
-        previous_heading_error = abs(wrap_to_pi(float(self._goal_state.front_heading) - float(previous_state.front_heading))) / np.pi
-        current_heading_error = abs(wrap_to_pi(float(self._goal_state.front_heading) - float(next_state.front_heading))) / np.pi
+        reference_heading = float(self._goal_state.front_heading)
+        if self._active_reference_goal_heading is not None:
+            reference_heading = float(self._active_reference_goal_heading)
+        previous_heading_error = abs(wrap_to_pi(reference_heading - float(previous_state.front_heading))) / np.pi
+        current_heading_error = abs(wrap_to_pi(reference_heading - float(next_state.front_heading))) / np.pi
         heading_progress = previous_heading_error - current_heading_error
         front_overlap_progress = float(current_metrics.front_overlap_ratio - previous_metrics.front_overlap_ratio)
         rear_overlap_progress = float(current_metrics.rear_overlap_ratio - previous_metrics.rear_overlap_ratio)
@@ -270,6 +488,17 @@ class KinematicTaskEnv:
         if timeout:
             terminal_bonus += float(self.reward_config.timeout_penalty)
         reward += terminal_bonus
+        stage_prev = self._stage_potential(previous_state)
+        stage_next = self._stage_potential(next_state)
+        stage_info: Dict[str, object] = {}
+        if stage_prev is not None and stage_next is not None:
+            stage_info = {
+                "stage_potential": float(stage_next["total"]),
+                "stage_potential_delta": float(stage_next["total"]) - float(stage_prev["total"]),
+                "stage_exit_progress": float(stage_next["exit"]),
+                "stage_route_progress": float(stage_next["route"]),
+                "stage_entry_progress": float(stage_next["entry"]),
+            }
         return float(reward), {
             "topology_progress": float(topology_progress),
             "topology_delta_j": float(delta_j),
@@ -287,7 +516,131 @@ class KinematicTaskEnv:
             "step_penalty": float(self.reward_config.step_penalty),
             "terminal_bonus": float(terminal_bonus),
             "progress_source": str(progress_source),
+            **stage_info,
         }
+
+    def _metadata_point(self, key: str) -> Optional[Tuple[float, float]]:
+        if self._scene is None:
+            return None
+        value = self._scene.metadata.get(str(key))
+        if value is None:
+            return None
+        try:
+            arr = np.asarray(value, dtype=np.float64).reshape(-1)
+        except (TypeError, ValueError):
+            return None
+        if arr.shape[0] < 2 or not bool(np.all(np.isfinite(arr[:2]))):
+            return None
+        return float(arr[0]), float(arr[1])
+
+    def _metadata_float(self, key: str) -> Optional[float]:
+        if self._scene is None:
+            return None
+        value = self._scene.metadata.get(str(key))
+        if value is None:
+            return None
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(parsed):
+            return None
+        return float(parsed)
+
+    @staticmethod
+    def _distance_to_point(state: ArticulatedState, point: Tuple[float, float]) -> float:
+        return float(math.hypot(float(state.x) - float(point[0]), float(state.y) - float(point[1])))
+
+    def _bay_stage_span(
+        self,
+        metadata_key: str,
+        endpoint: ArticulatedState,
+        mouth: Tuple[float, float],
+    ) -> float:
+        configured = self._metadata_float(metadata_key)
+        if configured is not None and configured > 1e-6:
+            return float(configured)
+        return float(max(self._distance_to_point(endpoint, mouth), 1e-6))
+
+    @staticmethod
+    def _stage_progress_from_distance(distance_m: float, span_m: float) -> float:
+        span = max(float(span_m), 1e-6)
+        return float(np.clip(span - float(distance_m), 0.0, span))
+
+    def _stage_potential(self, state: ArticulatedState) -> Optional[Dict[str, object]]:
+        if self._scene is None or self._goal_state is None:
+            return None
+
+        metadata = self._scene.metadata
+        start_role = str(metadata.get("start_role", "")).strip().lower()
+        goal_role = str(metadata.get("goal_role", "")).strip().lower()
+        start_mouth = self._metadata_point("start_bay_mouth")
+        goal_mouth = self._metadata_point("goal_bay_mouth")
+        if start_mouth is None and start_role == "bay":
+            start_mouth = self._metadata_point("bay_mouth")
+        if goal_mouth is None and goal_role == "bay":
+            goal_mouth = self._metadata_point("bay_mouth")
+
+        active = False
+        exit_progress = 0.0
+        if start_role == "bay" and start_mouth is not None:
+            exit_span = self._bay_stage_span("bay_exit_progress_m", self._scene.start_state, start_mouth)
+            exit_progress = self._stage_progress_from_distance(self._distance_to_point(state, start_mouth), exit_span)
+            active = True
+
+        route_progress = 0.0
+        route_mode = "unavailable"
+        if self._initial_topology_cost is not None:
+            current_cost, route_mode = self._global_guidance.query_cost_to_go_details(float(state.x), float(state.y))
+            if current_cost is not None:
+                route_progress = max(0.0, float(self._initial_topology_cost) - float(current_cost))
+        if route_progress <= 0.0:
+            path_progress = self._path_progress_m(state)
+            if path_progress is not None:
+                route_progress = max(0.0, float(path_progress))
+                route_mode = "path"
+
+        entry_progress = 0.0
+        if goal_role == "bay" and goal_mouth is not None:
+            entry_span = self._bay_stage_span("bay_entry_progress_m", self._goal_state, goal_mouth)
+            entry_progress = self._stage_progress_from_distance(float(self.distance_to_goal(state)), entry_span)
+            active = True
+
+        if not active:
+            return None
+        total = float(exit_progress + route_progress + entry_progress)
+        return {
+            "total": total,
+            "exit": float(exit_progress),
+            "route": float(route_progress),
+            "entry": float(entry_progress),
+            "route_mode": str(route_mode),
+        }
+
+    @staticmethod
+    def _stage_progress_source(previous: Dict[str, object], current: Dict[str, object]) -> str:
+        exit_delta = float(current["exit"]) - float(previous["exit"])
+        entry_delta = float(current["entry"]) - float(previous["entry"])
+        route_delta = float(current["route"]) - float(previous["route"])
+        if exit_delta > 1e-9:
+            return "bay_exit_potential"
+        if entry_delta > 1e-9:
+            return "bay_entry_potential"
+        deltas = {
+            "stage_route": route_delta,
+            "bay_exit_potential": exit_delta,
+            "bay_entry_potential": entry_delta,
+        }
+        positive = {key: value for key, value in deltas.items() if value > 1e-9}
+        if positive:
+            source = max(positive.items(), key=lambda item: item[1])[0]
+        else:
+            source = max(deltas.items(), key=lambda item: item[1])[0]
+        if source == "stage_route":
+            if str(previous.get("route_mode")) == "projected" or str(current.get("route_mode")) == "projected":
+                return "projected_stage_route"
+            return "stage_route"
+        return source
 
     def _progress_reward(
         self,
@@ -298,6 +651,29 @@ class KinematicTaskEnv:
         base_weight = float(self.reward_config.progress_weight)
         reverse_coef = float(self.reward_config.reverse_penalty_coef)
         sigma = max(float(self.reward_config.topology_sigma), 1e-6)
+
+        stage_prev = self._stage_potential(previous_state)
+        stage_next = self._stage_potential(next_state)
+        if stage_prev is not None and stage_next is not None:
+            prev_total = float(stage_prev["total"])
+            next_total = float(stage_next["total"])
+            if self._best_rewarded_stage_potential is None:
+                self._best_rewarded_stage_potential = prev_total
+            best_stage = max(float(self._best_rewarded_stage_potential), prev_total)
+            frontier_delta = max(0.0, next_total - best_stage)
+            if next_total > best_stage + 1e-9:
+                self._best_rewarded_stage_potential = next_total
+            raw_delta = float(next_total - prev_total)
+            forward = float(math.tanh(frontier_delta / sigma))
+            regression = float(reverse_coef * min(0.0, float(math.tanh(raw_delta / sigma))))
+            progress_source = self._stage_progress_source(stage_prev, stage_next)
+            weight_scale = (
+                float(self._PROJECTED_TOPOLOGY_WEIGHT_SCALE)
+                if progress_source == "projected_stage_route"
+                else 1.0
+            )
+            return forward + regression, raw_delta, base_weight * weight_scale, progress_source, 1.0
+
         j_prev, prev_mode = self._global_guidance.query_cost_to_go_details(float(previous_state.x), float(previous_state.y))
         j_next, next_mode = self._global_guidance.query_cost_to_go_details(float(next_state.x), float(next_state.y))
         if j_prev is not None and j_next is not None:
@@ -401,6 +777,10 @@ class KinematicTaskEnv:
             "step_count": int(self._step_count),
             "guidance_available": bool(self._guidance_available),
             "guidance_path_confidence": float(self._global_guidance.path_confidence),
+            "escape_reference_enabled": bool(self.env_config.escape_reference_enabled),
+            "reference_override_active": bool(
+                self._reference_override_goal_position is not None and self._reference_override_goal_heading is not None
+            ),
             "scene_metadata": scene_metadata,
             "scene_type": scene_metadata.get("scene_type"),
             "corridor_width": scene_metadata.get("corridor_width"),

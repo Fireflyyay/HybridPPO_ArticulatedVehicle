@@ -29,6 +29,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--safety-loss-coef", type=float, default=None)
     parser.add_argument("--resume", type=str, default=None)
     parser.add_argument("--disable-teacher", action="store_true", default=False)
+    parser.add_argument("--disable-escape-reference", action="store_true", default=False)
+    parser.add_argument("--enable-phase-reference", action="store_true", default=False)
     return parser
 
 
@@ -65,6 +67,8 @@ def build_experiment_config(args: argparse.Namespace) -> ExperimentConfig:
             if args.max_low_level_steps is not None
             else config.env.max_low_level_steps_per_episode
         ),
+        escape_reference_enabled=(not bool(args.disable_escape_reference)) and bool(config.env.escape_reference_enabled),
+        phase_reference_enabled=bool(args.enable_phase_reference) or bool(config.env.phase_reference_enabled),
     )
     schedule = replace(
         config.schedule,

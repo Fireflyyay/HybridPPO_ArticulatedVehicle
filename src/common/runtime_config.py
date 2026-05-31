@@ -25,7 +25,7 @@ class ObservationConfig:
 class RewardConfig:
     progress_weight: float = 8.0
     distance_weight: float = 2.5
-    heading_weight: float = 0.8
+    heading_weight: float = 0.15
     overlap_weight: float = 14.0
     step_penalty: float = -0.05
     success_reward: float = 35.0
@@ -34,7 +34,7 @@ class RewardConfig:
     timeout_penalty: float = -10.0
     topology_sigma: float = 8.0
     near_goal_radius: float = 10.0
-    reverse_penalty_coef: float = 0.2
+    reverse_penalty_coef: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -82,8 +82,8 @@ def build_scene_presets() -> Dict[str, SceneLevelConfig]:
         ),
         "Warmup": SceneLevelConfig(
             boundary_margin=2.0,
-            pair_distance_range=(6.0, 30.0),
-            pair_heading_diff_range_deg=(0.0, 120.0),
+            pair_distance_range=(16.0, 30.0),
+            pair_heading_diff_range_deg=(0.0, 180.0),
             corridor_width_range=(6, 6),
             warmup_corridor_max_width=16.0,
             warmup_turn_count_range=(1, 2),
@@ -114,6 +114,8 @@ def build_scene_presets() -> Dict[str, SceneLevelConfig]:
 class EnvRuntimeConfig:
     default_level: str = "Normal"
     max_low_level_steps_per_episode: int = 500
+    escape_reference_enabled: bool = False
+    phase_reference_enabled: bool = False
     scene_presets: Mapping[str, SceneLevelConfig] = field(default_factory=build_scene_presets)
 
 
@@ -124,16 +126,16 @@ class HybridPPOHyperConfig:
     actor_lr: float = 3e-4
     critic_lr: float = 1e-3
     gamma: float = 0.98
-    gae_lambda: float = 0.95
+    gae_lambda: float = 0.97
     clip_epsilon: float = 0.2
     value_coef: float = 0.5
     entropy_coef_discrete: float = 0.020
     entropy_coef_continuous: float = 0.008
     max_grad_norm: float = 0.5
     mini_batch_size: int = 1024
-    update_epochs: int = 10
+    update_epochs: int = 5
     std_floor: float = 0.08
-    soft_mask_enabled: bool = True
+    soft_mask_enabled: bool = False
     soft_mask_gamma: float = 1.0
     soft_mask_eps: float = 1e-4
     soft_mask_logit_scale: float = 0.8
@@ -178,7 +180,7 @@ class HybridPPOHyperConfig:
 
 @dataclass(frozen=True)
 class ProxySafetyConfig:
-    sidecar_path: str = "/home/cyberbus/Public/HybridPPO_ArticulatedVehicle/data/proxy_safety_sidecar.npz"
+    sidecar_path: str = "data/proxy_safety_sidecar.npz"
 
 
 @dataclass(frozen=True)
@@ -191,10 +193,11 @@ class TrainingScheduleConfig:
     warmup_corridor_convergence_episodes: int = 4000
     curriculum_recent_window: int = 100
     warmup_min_episodes: int = 2500
-    warmup_mastery_success_rate: float = 0.25
+    warmup_mastery_success_rate: float = 0.5
     target_success_band: Tuple[float, float] = (0.25, 0.60)
     target_focus_prob: float = 0.9
     warmup_bridge_prob: float = 0.5
+    warmup_bay_exit_prob: float = 0.5
 
     def warmup_progress_for_index(self, warmup_episode_idx: int) -> float:
         index = max(0, int(warmup_episode_idx))

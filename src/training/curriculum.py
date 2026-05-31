@@ -35,8 +35,20 @@ class SuccessBandCurriculum:
             return 0.0
         return float(np.mean(np.asarray(list(history), dtype=np.float32)))
 
+    def _raw_warmup_progress(self, warmup_episode_idx: Optional[int] = None) -> float:
+        index = self.level_counts[self.warmup_level] if warmup_episode_idx is None else int(warmup_episode_idx)
+        return float(self.schedule.warmup_progress_for_index(index))
+
+    def _warmup_progress_scale(self) -> float:
+        mastery = float(self.schedule.warmup_mastery_success_rate)
+        if mastery <= 1e-6:
+            return 1.0
+        success_rate = float(self.recent_success_rate(self.warmup_level))
+        success_ratio = float(np.clip(success_rate / mastery, 0.0, 1.0))
+        return float(0.5 + 0.5 * success_ratio)
+
     def warmup_progress(self) -> float:
-        return float(self.schedule.warmup_progress_for_index(self.level_counts[self.warmup_level]))
+        return float(np.clip(self._raw_warmup_progress() * self._warmup_progress_scale(), 0.0, 1.0))
 
     def _warmup_ready_for_band(self) -> bool:
         if int(self.level_counts[self.warmup_level]) < int(self.schedule.warmup_min_episodes):
@@ -71,7 +83,11 @@ class SuccessBandCurriculum:
         if level == self.warmup_level:
             warmup_episode_idx = int(self.level_counts[self.warmup_level])
             options["warmup_episode_idx"] = warmup_episode_idx
-            options["warmup_progress"] = float(self.schedule.warmup_progress_for_index(warmup_episode_idx))
+            options["warmup_progress"] = float(
+                np.clip(self._raw_warmup_progress(warmup_episode_idx) * self._warmup_progress_scale(), 0.0, 1.0)
+            )
+            bay_exit_prob = float(np.clip(float(self.schedule.warmup_bay_exit_prob), 0.0, 1.0))
+            options["warmup_task"] = "BayExit" if float(self.rng.random()) < bay_exit_prob else "BayEntry"
         return options
 
     def record_episode(self, level: str, success: bool) -> None:

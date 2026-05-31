@@ -77,6 +77,8 @@ def evaluate_soft_teacher(
         last_info = dict(info)
 
         while macro_steps < int(config.schedule.max_macro_steps_per_episode) and not (terminated or truncated):
+            if hasattr(env, "clear_reference_override"):
+                env.clear_reference_override()
             advice = teacher.advise(observation, previous_action_id=previous_action_id)
             if advice is None:
                 last_info = dict(last_info)
@@ -89,6 +91,12 @@ def evaluate_soft_teacher(
             else:
                 action_id = int(rng.choice(np.arange(advice.action_probs.shape[0]), p=advice.action_probs))
             parameters = np.asarray(advice.parameter_targets[action_id], dtype=np.float32).copy()
+            if (
+                hasattr(env, "set_reference_override")
+                and advice.reference_goal_position is not None
+                and advice.reference_goal_heading is not None
+            ):
+                env.set_reference_override(advice.reference_goal_position, float(advice.reference_goal_heading))
             next_observation, reward, terminated, truncated, step_info = macro_env.step(
                 MacroAction(primitive_id=action_id, parameters=parameters),
                 start_state=env.get_articulated_state(),

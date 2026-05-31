@@ -1,0 +1,970 @@
+{
+  "summary": {
+    "horizontal_endpoint_like": {
+      "count": 19,
+      "success_rate": 0.0,
+      "collision_rate": 0.15789473684210525,
+      "stuck_rate": 0.8421052631578947,
+      "mean_final_goal_distance": 27.442039313779368,
+      "mean_heading_diff_deg": 94.73684210526316,
+      "mean_start_clearance_m": 0.0,
+      "mean_straight_adjust_rate": 0.19652788431899107,
+      "mean_articulation_recover_rate": 0.0,
+      "dominant_semantics": {
+        "reverse-left": 5,
+        "forward-right": 6,
+        "reverse-right": 4,
+        "straight-adjust": 4
+      }
+    },
+    "vertical_boundary_like": {
+      "count": 10,
+      "success_rate": 0.6,
+      "collision_rate": 0.0,
+      "stuck_rate": 0.4,
+      "mean_final_goal_distance": 2.5217998006648488,
+      "mean_heading_diff_deg": 90.0,
+      "mean_start_clearance_m": 0.0,
+      "mean_straight_adjust_rate": 0.032100764732343676,
+      "mean_articulation_recover_rate": 0.0,
+      "dominant_semantics": {
+        "forward-right": 5,
+        "forward-left": 4,
+        "reverse-left": 1
+      }
+    },
+    "vertical_inner_like": {
+      "count": 1,
+      "success_rate": 0.0,
+      "collision_rate": 1.0,
+      "stuck_rate": 0.0,
+      "mean_final_goal_distance": 36.674291996189346,
+      "mean_heading_diff_deg": 180.0,
+      "mean_start_clearance_m": 0.0,
+      "mean_straight_adjust_rate": 0.0,
+      "mean_articulation_recover_rate": 0.0,
+      "dominant_semantics": {
+        "forward-right": 1
+      }
+    }
+  },
+  "records": [
+    {
+      "seed": 10000,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 3.141592653589793,
+      "start_xy": [
+        -6.233906286241312,
+        17.17916826902701
+      ],
+      "goal_heading": -1.5707963267948966,
+      "goal_xy": [
+        0.26704643728739974,
+        31.55
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 72,
+      "low_level_steps": 500,
+      "final_goal_distance": 14.403856301178848,
+      "semantic_counts": {
+        "reverse-right": 1,
+        "forward-right": 20,
+        "reverse-left": 22,
+        "straight-adjust": 18,
+        "forward-left": 11
+      },
+      "dominant_semantic": "reverse-left",
+      "selected_straight_adjust_rate": 0.25,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10001,
+      "start_bucket": "vertical_boundary_like",
+      "start_heading": -1.5707963267948966,
+      "start_xy": [
+        3.4369027705834387,
+        31.55
+      ],
+      "goal_heading": 0.0,
+      "goal_xy": [
+        7.464468807569847,
+        -9.690908915374049
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 50,
+      "low_level_steps": 500,
+      "final_goal_distance": 1.0644827509191552,
+      "semantic_counts": {
+        "forward-right": 21,
+        "forward-left": 11,
+        "reverse-left": 3,
+        "reverse-right": 15
+      },
+      "dominant_semantic": "forward-right",
+      "selected_straight_adjust_rate": 0.0,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10002,
+      "start_bucket": "vertical_boundary_like",
+      "start_heading": -1.5707963267948966,
+      "start_xy": [
+        2.1629743908695875,
+        31.55
+      ],
+      "goal_heading": 0.0,
+      "goal_xy": [
+        8.658042067063523,
+        2.9652144959569995
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "goal",
+      "success": true,
+      "collision": false,
+      "macro_steps": 11,
+      "low_level_steps": 117,
+      "final_goal_distance": 0.9663582254144273,
+      "semantic_counts": {
+        "forward-right": 5,
+        "forward-left": 6
+      },
+      "dominant_semantic": "forward-left",
+      "selected_straight_adjust_rate": 0.0,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10003,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 0.0,
+      "start_xy": [
+        8.264671250011556,
+        -11.288707087537372
+      ],
+      "goal_heading": 0.0,
+      "goal_xy": [
+        8.555816498174853,
+        29.883756726944497
+      ],
+      "heading_diff_deg": 0.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 82,
+      "low_level_steps": 500,
+      "final_goal_distance": 41.584398314390995,
+      "semantic_counts": {
+        "reverse-right": 3,
+        "forward-right": 30,
+        "reverse-left": 38,
+        "forward-left": 11
+      },
+      "dominant_semantic": "reverse-left",
+      "selected_straight_adjust_rate": 0.0,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10004,
+      "start_bucket": "vertical_inner_like",
+      "start_heading": 1.5707963267948966,
+      "start_xy": [
+        -4.80340388264783,
+        -4.008760063390947
+      ],
+      "goal_heading": -1.5707963267948966,
+      "goal_xy": [
+        5.430442379421075,
+        31.55
+      ],
+      "heading_diff_deg": 180.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "collision",
+      "success": false,
+      "collision": true,
+      "macro_steps": 1,
+      "low_level_steps": 4,
+      "final_goal_distance": 36.674291996189346,
+      "semantic_counts": {
+        "forward-right": 1
+      },
+      "dominant_semantic": "forward-right",
+      "selected_straight_adjust_rate": 0.0,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10005,
+      "start_bucket": "vertical_boundary_like",
+      "start_heading": -1.5707963267948966,
+      "start_xy": [
+        -4.61954047778503,
+        31.55
+      ],
+      "goal_heading": 0.0,
+      "goal_xy": [
+        0.2693171478126475,
+        1.0702147262666557
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 67,
+      "low_level_steps": 500,
+      "final_goal_distance": 8.162423348248291,
+      "semantic_counts": {
+        "forward-right": 27,
+        "forward-left": 17,
+        "reverse-right": 22,
+        "reverse-left": 1
+      },
+      "dominant_semantic": "forward-right",
+      "selected_straight_adjust_rate": 0.0,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10006,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 3.141592653589793,
+      "start_xy": [
+        -15.892629199915756,
+        -2.799769557486428
+      ],
+      "goal_heading": 1.5707963267948966,
+      "goal_xy": [
+        -5.766714739201726,
+        -31.55
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 78,
+      "low_level_steps": 500,
+      "final_goal_distance": 29.23797777781305,
+      "semantic_counts": {
+        "reverse-right": 5,
+        "straight-adjust": 19,
+        "reverse-left": 24,
+        "forward-right": 28,
+        "forward-left": 2
+      },
+      "dominant_semantic": "forward-right",
+      "selected_straight_adjust_rate": 0.24358974358974358,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10007,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 3.141592653589793,
+      "start_xy": [
+        0.9075831134357513,
+        17.69331572530036
+      ],
+      "goal_heading": -1.5707963267948966,
+      "goal_xy": [
+        13.353177335563428,
+        -11.019871288522317
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 73,
+      "low_level_steps": 500,
+      "final_goal_distance": 31.049910828263684,
+      "semantic_counts": {
+        "forward-left": 17,
+        "reverse-left": 20,
+        "forward-right": 24,
+        "reverse-right": 12
+      },
+      "dominant_semantic": "forward-right",
+      "selected_straight_adjust_rate": 0.0,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10008,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 0.0,
+      "start_xy": [
+        5.197274178266187,
+        21.603784422572183
+      ],
+      "goal_heading": 3.141592653589793,
+      "goal_xy": [
+        -4.618402436326272,
+        8.136459949266474
+      ],
+      "heading_diff_deg": 180.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 82,
+      "low_level_steps": 500,
+      "final_goal_distance": 16.228793180350582,
+      "semantic_counts": {
+        "reverse-right": 40,
+        "forward-right": 38,
+        "reverse-left": 2,
+        "forward-left": 2
+      },
+      "dominant_semantic": "reverse-right",
+      "selected_straight_adjust_rate": 0.0,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10009,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 0.0,
+      "start_xy": [
+        4.309383317045826,
+        6.22415064942485
+      ],
+      "goal_heading": 0.0,
+      "goal_xy": [
+        10.509638964360171,
+        -3.7581981652964593
+      ],
+      "heading_diff_deg": 0.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "collision",
+      "success": false,
+      "collision": true,
+      "macro_steps": 2,
+      "low_level_steps": 12,
+      "final_goal_distance": 11.210530940968237,
+      "semantic_counts": {
+        "forward-right": 1,
+        "straight-adjust": 1
+      },
+      "dominant_semantic": "forward-right",
+      "selected_straight_adjust_rate": 0.5,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10010,
+      "start_bucket": "vertical_boundary_like",
+      "start_heading": -1.5707963267948966,
+      "start_xy": [
+        -5.986112759854237,
+        31.55
+      ],
+      "goal_heading": 0.0,
+      "goal_xy": [
+        2.7844238210025045,
+        13.563871736825291
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "goal",
+      "success": true,
+      "collision": false,
+      "macro_steps": 10,
+      "low_level_steps": 87,
+      "final_goal_distance": 1.274807746600179,
+      "semantic_counts": {
+        "forward-left": 8,
+        "forward-right": 2
+      },
+      "dominant_semantic": "forward-left",
+      "selected_straight_adjust_rate": 0.0,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10011,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 0.0,
+      "start_xy": [
+        7.096550231114308,
+        12.175725596366007
+      ],
+      "goal_heading": -1.5707963267948966,
+      "goal_xy": [
+        -0.01297296310951701,
+        31.55
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 77,
+      "low_level_steps": 500,
+      "final_goal_distance": 19.978526068241262,
+      "semantic_counts": {
+        "reverse-right": 8,
+        "straight-adjust": 28,
+        "reverse-left": 15,
+        "forward-right": 26
+      },
+      "dominant_semantic": "straight-adjust",
+      "selected_straight_adjust_rate": 0.36363636363636365,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10012,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 0.0,
+      "start_xy": [
+        -0.2374830753109256,
+        21.085910996697628
+      ],
+      "goal_heading": 3.141592653589793,
+      "goal_xy": [
+        -13.21890999516443,
+        -23.805831124574013
+      ],
+      "heading_diff_deg": 180.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 80,
+      "low_level_steps": 500,
+      "final_goal_distance": 47.139500915250004,
+      "semantic_counts": {
+        "reverse-right": 40,
+        "forward-left": 15,
+        "forward-right": 25
+      },
+      "dominant_semantic": "reverse-right",
+      "selected_straight_adjust_rate": 0.0,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10013,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 0.0,
+      "start_xy": [
+        9.770640169446175,
+        -7.936087200203662
+      ],
+      "goal_heading": 3.141592653589793,
+      "goal_xy": [
+        -11.90710323466768,
+        4.751072950439628
+      ],
+      "heading_diff_deg": 180.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 80,
+      "low_level_steps": 500,
+      "final_goal_distance": 22.385915309481614,
+      "semantic_counts": {
+        "reverse-right": 4,
+        "reverse-left": 28,
+        "forward-right": 35,
+        "straight-adjust": 13
+      },
+      "dominant_semantic": "forward-right",
+      "selected_straight_adjust_rate": 0.1625,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10014,
+      "start_bucket": "vertical_boundary_like",
+      "start_heading": 1.5707963267948966,
+      "start_xy": [
+        -5.993727832250933,
+        -31.55
+      ],
+      "goal_heading": 0.0,
+      "goal_xy": [
+        3.972072550446579,
+        -8.669313716350143
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 54,
+      "low_level_steps": 500,
+      "final_goal_distance": 1.3286702308581544,
+      "semantic_counts": {
+        "forward-right": 22,
+        "forward-left": 6,
+        "reverse-left": 17,
+        "straight-adjust": 9
+      },
+      "dominant_semantic": "forward-right",
+      "selected_straight_adjust_rate": 0.16666666666666666,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10015,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 3.141592653589793,
+      "start_xy": [
+        -8.241818162918548,
+        -16.948011514689135
+      ],
+      "goal_heading": 1.5707963267948966,
+      "goal_xy": [
+        -0.2686453168483247,
+        -31.55
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 77,
+      "low_level_steps": 500,
+      "final_goal_distance": 15.74388634971887,
+      "semantic_counts": {
+        "reverse-right": 1,
+        "reverse-left": 20,
+        "forward-right": 26,
+        "straight-adjust": 30
+      },
+      "dominant_semantic": "straight-adjust",
+      "selected_straight_adjust_rate": 0.38961038961038963,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10016,
+      "start_bucket": "vertical_boundary_like",
+      "start_heading": -1.5707963267948966,
+      "start_xy": [
+        -6.212366116417122,
+        31.55
+      ],
+      "goal_heading": 3.141592653589793,
+      "goal_xy": [
+        -11.726941425578435,
+        -15.624784666559759
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "goal",
+      "success": true,
+      "collision": false,
+      "macro_steps": 18,
+      "low_level_steps": 183,
+      "final_goal_distance": 0.9336341803736323,
+      "semantic_counts": {
+        "forward-right": 8,
+        "forward-left": 10
+      },
+      "dominant_semantic": "forward-left",
+      "selected_straight_adjust_rate": 0.0,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10017,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 3.141592653589793,
+      "start_xy": [
+        -4.628985912231342,
+        -12.257545573059819
+      ],
+      "goal_heading": 0.0,
+      "goal_xy": [
+        8.113919671497225,
+        -10.879481626956292
+      ],
+      "heading_diff_deg": 180.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "collision",
+      "success": false,
+      "collision": true,
+      "macro_steps": 17,
+      "low_level_steps": 128,
+      "final_goal_distance": 8.211483061659916,
+      "semantic_counts": {
+        "reverse-right": 10,
+        "forward-right": 7
+      },
+      "dominant_semantic": "reverse-right",
+      "selected_straight_adjust_rate": 0.0,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10018,
+      "start_bucket": "vertical_boundary_like",
+      "start_heading": 1.5707963267948966,
+      "start_xy": [
+        -0.9406752300269261,
+        -31.55
+      ],
+      "goal_heading": 3.141592653589793,
+      "goal_xy": [
+        -7.729259723501374,
+        7.613998078355408
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "goal",
+      "success": true,
+      "collision": false,
+      "macro_steps": 19,
+      "low_level_steps": 185,
+      "final_goal_distance": 0.772238249962748,
+      "semantic_counts": {
+        "forward-right": 5,
+        "forward-left": 13,
+        "straight-adjust": 1
+      },
+      "dominant_semantic": "forward-left",
+      "selected_straight_adjust_rate": 0.05263157894736842,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10019,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 0.0,
+      "start_xy": [
+        13.7898934546803,
+        -22.397774130229266
+      ],
+      "goal_heading": -1.5707963267948966,
+      "goal_xy": [
+        2.7308656708937153,
+        31.55
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 79,
+      "low_level_steps": 500,
+      "final_goal_distance": 54.23205887998087,
+      "semantic_counts": {
+        "reverse-right": 6,
+        "forward-right": 33,
+        "reverse-left": 25,
+        "straight-adjust": 15
+      },
+      "dominant_semantic": "forward-right",
+      "selected_straight_adjust_rate": 0.189873417721519,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10020,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 0.0,
+      "start_xy": [
+        2.569938802068301,
+        -25.063217063922913
+      ],
+      "goal_heading": 0.0,
+      "goal_xy": [
+        3.187631353637067,
+        9.55119095758328
+      ],
+      "heading_diff_deg": 0.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 52,
+      "low_level_steps": 500,
+      "final_goal_distance": 34.9281056622086,
+      "semantic_counts": {
+        "reverse-right": 4,
+        "forward-right": 4,
+        "reverse-left": 24,
+        "straight-adjust": 20
+      },
+      "dominant_semantic": "reverse-left",
+      "selected_straight_adjust_rate": 0.38461538461538464,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10021,
+      "start_bucket": "vertical_boundary_like",
+      "start_heading": -1.5707963267948966,
+      "start_xy": [
+        -5.364804066160197,
+        31.55
+      ],
+      "goal_heading": 0.0,
+      "goal_xy": [
+        1.0759983409731353,
+        20.126292969498465
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 65,
+      "low_level_steps": 500,
+      "final_goal_distance": 9.144655236809083,
+      "semantic_counts": {
+        "forward-right": 19,
+        "forward-left": 17,
+        "reverse-right": 1,
+        "reverse-left": 24,
+        "reverse-align": 1,
+        "straight-adjust": 3
+      },
+      "dominant_semantic": "reverse-left",
+      "selected_straight_adjust_rate": 0.046153846153846156,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10022,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 3.141592653589793,
+      "start_xy": [
+        -5.843175232055676,
+        21.93902717593525
+      ],
+      "goal_heading": 1.5707963267948966,
+      "goal_xy": [
+        3.4757766452441086,
+        -31.55
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 82,
+      "low_level_steps": 500,
+      "final_goal_distance": 53.56464330032673,
+      "semantic_counts": {
+        "reverse-right": 3,
+        "straight-adjust": 30,
+        "reverse-left": 21,
+        "forward-right": 28
+      },
+      "dominant_semantic": "straight-adjust",
+      "selected_straight_adjust_rate": 0.36585365853658536,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10023,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 0.0,
+      "start_xy": [
+        13.18191274237211,
+        11.048769995025388
+      ],
+      "goal_heading": -1.5707963267948966,
+      "goal_xy": [
+        2.5514431078723536,
+        31.55
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 77,
+      "low_level_steps": 500,
+      "final_goal_distance": 20.230595025129205,
+      "semantic_counts": {
+        "reverse-right": 1,
+        "reverse-left": 26,
+        "straight-adjust": 19,
+        "forward-left": 13,
+        "forward-right": 18
+      },
+      "dominant_semantic": "reverse-left",
+      "selected_straight_adjust_rate": 0.24675324675324675,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10024,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 3.141592653589793,
+      "start_xy": [
+        -13.912673245060326,
+        21.15062225388671
+      ],
+      "goal_heading": 3.141592653589793,
+      "goal_xy": [
+        -15.28417263650654,
+        9.029937588785963
+      ],
+      "heading_diff_deg": 0.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 75,
+      "low_level_steps": 500,
+      "final_goal_distance": 12.595646891418234,
+      "semantic_counts": {
+        "reverse-left": 9,
+        "forward-right": 36,
+        "reverse-right": 27,
+        "straight-adjust": 3
+      },
+      "dominant_semantic": "forward-right",
+      "selected_straight_adjust_rate": 0.04,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10025,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 0.0,
+      "start_xy": [
+        7.990833660633078,
+        6.943495951905149
+      ],
+      "goal_heading": 1.5707963267948966,
+      "goal_xy": [
+        1.926098777016577,
+        -31.55
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 74,
+      "low_level_steps": 500,
+      "final_goal_distance": 38.27741655280001,
+      "semantic_counts": {
+        "reverse-left": 25,
+        "straight-adjust": 36,
+        "forward-right": 12,
+        "forward-left": 1
+      },
+      "dominant_semantic": "straight-adjust",
+      "selected_straight_adjust_rate": 0.4864864864864865,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10026,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 3.141592653589793,
+      "start_xy": [
+        1.8759642189781536,
+        2.4534355811439426
+      ],
+      "goal_heading": 1.5707963267948966,
+      "goal_xy": [
+        6.73366129244755,
+        -31.55
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "collision",
+      "success": false,
+      "collision": true,
+      "macro_steps": 54,
+      "low_level_steps": 339,
+      "final_goal_distance": 33.90910986780106,
+      "semantic_counts": {
+        "reverse-left": 23,
+        "forward-right": 5,
+        "forward-left": 20,
+        "straight-adjust": 6
+      },
+      "dominant_semantic": "reverse-left",
+      "selected_straight_adjust_rate": 0.1111111111111111,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10027,
+      "start_bucket": "vertical_boundary_like",
+      "start_heading": 1.5707963267948966,
+      "start_xy": [
+        -3.6810243201048856,
+        -31.55
+      ],
+      "goal_heading": 0.0,
+      "goal_xy": [
+        6.2808863553771905,
+        -0.35742863590630236
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "goal",
+      "success": true,
+      "collision": false,
+      "macro_steps": 14,
+      "low_level_steps": 139,
+      "final_goal_distance": 0.7716615533806803,
+      "semantic_counts": {
+        "forward-right": 9,
+        "forward-left": 5
+      },
+      "dominant_semantic": "forward-right",
+      "selected_straight_adjust_rate": 0.0,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10028,
+      "start_bucket": "horizontal_endpoint_like",
+      "start_heading": 3.141592653589793,
+      "start_xy": [
+        -12.866709021537279,
+        -29.554476704454732
+      ],
+      "goal_heading": 0.0,
+      "goal_xy": [
+        3.2125236493343925,
+        -19.293898456795908
+      ],
+      "heading_diff_deg": 180.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "timeout",
+      "success": false,
+      "collision": false,
+      "macro_steps": 72,
+      "low_level_steps": 500,
+      "final_goal_distance": 16.486391734826167,
+      "semantic_counts": {
+        "reverse-right": 26,
+        "reverse-left": 2,
+        "forward-left": 25,
+        "forward-right": 19
+      },
+      "dominant_semantic": "reverse-right",
+      "selected_straight_adjust_rate": 0.0,
+      "selected_articulation_recover_rate": 0.0
+    },
+    {
+      "seed": 10029,
+      "start_bucket": "vertical_boundary_like",
+      "start_heading": -1.5707963267948966,
+      "start_xy": [
+        -7.173325571740888,
+        31.55
+      ],
+      "goal_heading": 3.141592653589793,
+      "goal_xy": [
+        -13.699826717354814,
+        -10.602093622645729
+      ],
+      "heading_diff_deg": 90.0,
+      "start_min_clearance_m": 0.0,
+      "done_reason": "goal",
+      "success": true,
+      "collision": false,
+      "macro_steps": 18,
+      "low_level_steps": 176,
+      "final_goal_distance": 0.7990664840821368,
+      "semantic_counts": {
+        "forward-left": 6,
+        "forward-right": 11,
+        "straight-adjust": 1
+      },
+      "dominant_semantic": "forward-right",
+      "selected_straight_adjust_rate": 0.05555555555555555,
+      "selected_articulation_recover_rate": 0.0
+    }
+  ]
+}

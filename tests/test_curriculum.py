@@ -23,6 +23,33 @@ def test_success_band_waits_for_narrow_warmup_mastery():
         assert curriculum.success_band_active() == (index >= 5)
 
 
+def test_warmup_progress_is_damped_when_success_lags():
+    schedule = TrainingScheduleConfig(
+        warmup_min_episodes=8,
+        warmup_corridor_convergence_episodes=4,
+        curriculum_recent_window=4,
+        warmup_mastery_success_rate=0.5,
+    )
+    curriculum = SuccessBandCurriculum(schedule, seed=13)
+
+    for _ in range(4):
+        curriculum.record_episode("Warmup", success=False)
+
+    options = curriculum.reset_options()
+
+    assert options["level"] == "Warmup"
+    assert np.isclose(float(options["warmup_progress"]), 0.5)
+    assert np.isclose(curriculum.warmup_progress(), 0.5)
+
+
+def test_warmup_reset_options_include_configurable_bay_exit_task():
+    exit_curriculum = SuccessBandCurriculum(TrainingScheduleConfig(warmup_bay_exit_prob=1.0), seed=13)
+    entry_curriculum = SuccessBandCurriculum(TrainingScheduleConfig(warmup_bay_exit_prob=0.0), seed=13)
+
+    assert exit_curriculum.reset_options()["warmup_task"] == "BayExit"
+    assert entry_curriculum.reset_options()["warmup_task"] == "BayEntry"
+
+
 def test_success_band_bridges_back_to_warmup_when_target_is_below_band():
     schedule = TrainingScheduleConfig(
         warmup_min_episodes=4,

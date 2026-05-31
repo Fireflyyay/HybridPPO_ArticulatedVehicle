@@ -103,6 +103,35 @@ def test_hybrid_agent_action_and_update_smoke():
     assert "invalid_loss" in metrics
 
 
+def test_continuous_distribution_respects_std_floor():
+    library = build_default_primitive_library()
+    config = HybridPPOConfig(
+        observation_dim=10,
+        action_dim=library.action_dim,
+        parameter_dim=library.parameter_dim,
+        std_floor=0.15,
+    )
+    agent = HybridPPOAgent(config, library)
+
+    def _collapsed_raw(observations, action_ids, action_mask=None):
+        del action_ids, action_mask
+        return torch.full(
+            (observations.shape[0], 2 * library.parameter_dim),
+            12.0,
+            dtype=torch.float32,
+            device=agent.device,
+        )
+
+    agent.policy.continuous_raw = _collapsed_raw
+    dist = agent._continuous_dist(
+        agent._obs_tensor(np.zeros((10,), dtype=np.float32)),
+        torch.as_tensor([0], dtype=torch.int64, device=agent.device),
+    )
+    normalized_std = dist.stddev / torch.clamp(agent._high - agent._low, min=1e-6)
+
+    assert float(torch.min(normalized_std).item()) >= 0.149
+
+
 def test_hybrid_policy_network_responds_to_action_mask_input():
     torch.manual_seed(7)
     policy = HybridPolicyNetwork(

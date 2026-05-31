@@ -37,6 +37,22 @@ def test_warmup_scene_uses_warmup_bay_metadata():
     assert "warmup_progress" in scene.metadata
 
 
+def test_warmup_scene_can_sample_bay_exit_task():
+    factory = BaselineInspiredSceneFactory({"Warmup": SceneLevelConfig()}, vehicle_config=VehicleConfig())
+
+    scene = factory.generate(
+        "Warmup",
+        np.random.default_rng(7),
+        options={"warmup_progress": 0.25, "warmup_task": "BayExit"},
+    )
+
+    assert scene.metadata["warmup_task"] == "BayExit"
+    assert scene.metadata["start_role"] == "bay"
+    assert scene.metadata["goal_role"] == "corridor"
+    assert scene.metadata["start_bay_mouth"] is not None
+    assert scene.metadata["goal_bay_mouth"] is None
+
+
 def test_normal_scene_uses_block_mixing_metadata():
     factory = BaselineInspiredSceneFactory({"Normal": SceneLevelConfig()}, vehicle_config=VehicleConfig())
 
@@ -48,6 +64,10 @@ def test_normal_scene_uses_block_mixing_metadata():
     assert int(scene.metadata["free_shape_count"]) >= 1
     assert int(scene.metadata["valid_candidate_count"]) >= 2
     assert len(scene.obstacles) > 0
+    if scene.metadata["start_role"] == "bay":
+        assert scene.metadata["start_bay_mouth"] is not None
+    if scene.metadata["goal_role"] == "bay":
+        assert scene.metadata["goal_bay_mouth"] is not None
 
 
 def test_training_schedule_clamps_warmup_progress_from_warmup_index():

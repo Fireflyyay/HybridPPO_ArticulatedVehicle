@@ -1,8 +1,9 @@
 import numpy as np
 
 from common.config import PrimitiveExecutorConfig, VehicleConfig
+from primitives import ParameterizedPrimitiveExecutor
 from primitives import build_default_primitive_library
-from primitives.proxy_safety import ProxySafetySidecar, build_proxy_parameter_grid, build_proxy_safety_sidecar, save_proxy_safety_sidecar
+from primitives.proxy_safety import ProxySafetySidecar, _simulate_proxy_rollout, build_proxy_parameter_grid, build_proxy_safety_sidecar, save_proxy_safety_sidecar
 
 
 
@@ -74,6 +75,28 @@ def test_proxy_safety_builder_smoke():
     assert sidecar.required_clearance.shape == (2, library.action_dim, 1, 4, 4)
     assert sidecar.proxy_valid_mask.shape == (library.action_dim, 1)
     assert np.all(sidecar.nominal_horizons >= 1)
+    assert sidecar.metadata["executor_semantics_version"] == 2
+
+
+def test_proxy_rollout_uses_limit_aware_control_near_articulation_limit():
+    library = build_default_primitive_library()
+    executor = ParameterizedPrimitiveExecutor(library)
+    articulation = float(executor.vehicle_config.articulation_limit_rad) - 0.01
+    params = library.dict_to_vector(
+        {
+            "path_length": 3.0,
+            "duration": 2.0,
+            "speed_scale": 0.5,
+            "omega_scale": 0.7,
+            "phi_target": 0.0,
+            "smoothness": 0.0,
+        }
+    )
+
+    states = _simulate_proxy_rollout(executor, primitive_id=0, parameters=params, articulation_angle=articulation)
+
+    assert len(states) > 2
+    assert abs(float(states[1].articulation_angle)) < float(executor.vehicle_config.articulation_limit_rad)
 
 
 def test_proxy_parameter_grid_supports_semantic_resolution_override():

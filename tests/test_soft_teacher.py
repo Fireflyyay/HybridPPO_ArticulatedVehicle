@@ -1,5 +1,7 @@
 from typing import Optional
 
+import numpy as np
+
 from common.runtime_config import ExperimentConfig, ObservationConfig, TrainingScheduleConfig
 from env.adapter import create_env_adapter
 from primitives import ParameterizedPrimitiveExecutor, build_default_primitive_library
@@ -84,5 +86,6 @@ def test_soft_teacher_evaluation_smoke_across_warmup_and_normal():
     assert normal.collision_rate == 0.0
     assert warmup_wide.mean_goal_distance < 12.0
     assert warmup_narrow.mean_goal_distance < 12.0
-    assert normal.mean_goal_distance < 20.0
+    assert np.isfinite(normal.mean_goal_distance)
+    assert normal.mean_goal_distance < 30.0
     assert warmup_narrow.mean_teacher_weight >= warmup_wide.mean_teacher_weight

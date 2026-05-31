@@ -25,3 +25,23 @@ def test_trainer_skips_teacher_construction_when_disabled(tmp_path):
         assert trainer.soft_teacher is None
     finally:
         trainer.logger.close()
+
+
+def test_build_experiment_config_keeps_local_reference_disabled_by_default():
+    parser = build_argument_parser()
+    args = parser.parse_args([])
+
+    config = build_experiment_config(args)
+
+    assert config.env.escape_reference_enabled is False
+    assert config.env.phase_reference_enabled is False
+    assert config.agent.soft_mask_enabled is False
+
+
+def test_build_experiment_config_enables_soft_mask_explicitly():
+    parser = build_argument_parser()
+    args = parser.parse_args(["--enable-soft-mask"])
+
+    config = build_experiment_config(args)
+
+    assert config.agent.soft_mask_enabled is True

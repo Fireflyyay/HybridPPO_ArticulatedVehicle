@@ -15,7 +15,7 @@ class CoarseGlobalGuidance:
         self,
         grid_resolution: float = 1.0,
         lookahead_base: float = 6.0,
-        lookahead_speed_gain: float = 1.5,
+        lookahead_speed_gain: float = 2.5,
         lookahead_min: float = 3.0,
         lookahead_max: float = 12.0,
         progress_search_window: int = 40,

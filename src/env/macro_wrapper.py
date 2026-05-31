@@ -56,6 +56,10 @@ class ParameterizedMacroActionWrapper:
             "tau": int(tau),
             "primitive_id": int(macro_action.primitive_id),
             "parameters": np.asarray(macro_action.parameters, dtype=np.float32).copy(),
+            "macro_termination_reason": str(rollout.termination_reason),
+            "macro_articulation_limit_hit": bool(rollout.termination_reason == "articulation_limit"),
+            "macro_elapsed_time": float(rollout.elapsed_time),
+            "macro_travelled_distance": float(rollout.travelled_distance),
             "macro_rollout": rollout,
         })
         return last_obs, float(total_reward), bool(terminated), bool(truncated), info

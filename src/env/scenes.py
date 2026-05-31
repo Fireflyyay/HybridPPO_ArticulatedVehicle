@@ -26,6 +26,8 @@ class _PoseCandidate:
     x: float
     y: float
     heading: float
+    role: str = "corridor"
+    bay_mouth: Optional[Tuple[float, float]] = None
 
 
 def _extract_polygons(geometry) -> List[Polygon]:
@@ -50,6 +52,15 @@ def _warmup_progress(options: Optional[Mapping[str, object]]) -> Optional[float]
     if not options or "warmup_progress" not in options:
         return None
     return float(options["warmup_progress"])
+
+
+def _warmup_task(options: Optional[Mapping[str, object]]) -> str:
+    if not options:
+        return "BayEntry"
+    requested = str(options.get("warmup_task", options.get("warmup_variant", "BayEntry"))).strip().lower()
+    if requested in {"bayexit", "bay_exit", "exit"}:
+        return "BayExit"
+    return "BayEntry"
 
 
 class BaselineInspiredSceneFactory:
@@ -185,8 +196,31 @@ class BaselineInspiredSceneFactory:
                 gx -= np.cos(float(bay_heading)) * step
                 gy -= np.sin(float(bay_heading)) * step
                 goal_state = ArticulatedState(x=gx, y=gy, front_heading=float(bay_heading), rear_heading=float(bay_heading))
-        start_state = ArticulatedState(x=sx, y=sy, front_heading=start_heading, rear_heading=start_heading)
-        goal_state = ArticulatedState(x=gx, y=gy, front_heading=float(bay_heading), rear_heading=float(bay_heading))
+        entry_start_state = ArticulatedState(x=sx, y=sy, front_heading=start_heading, rear_heading=start_heading)
+        bay_state = ArticulatedState(x=gx, y=gy, front_heading=float(bay_heading), rear_heading=float(bay_heading))
+
+        task = _warmup_task(options)
+        if task == "BayExit":
+            start_state = bay_state
+            goal_state = self._warmup_corridor_endpoint_goal(centerline, start_xy=(float(bay_state.x), float(bay_state.y)))
+            start_role = "bay"
+            goal_role = "corridor"
+        else:
+            start_state = entry_start_state
+            goal_state = bay_state
+            start_role = "corridor"
+            goal_role = "bay"
+
+        centerline_geometry = LineString(centerline)
+        bay_centroid = bay_polygon.centroid
+        bay_centerline_distance = float(centerline_geometry.distance(bay_centroid))
+        bay_stage_progress_m = float(
+            max(
+                bay_centerline_distance + 0.5 * float(self.vehicle_config.body_width),
+                0.5 * (self._front_reach() + self._rear_reach()),
+            )
+        )
+        bay_mouth = centerline_geometry.interpolate(centerline_geometry.project(bay_centroid))
 
         return SceneSpec(
             level=level,
@@ -197,13 +231,45 @@ class BaselineInspiredSceneFactory:
             metadata={
                 "scene_type": "warmup_centerline",
                 "aligned_to": "ppo_articulated_vehicle",
+                "warmup_task": str(task),
+                "start_role": str(start_role),
+                "goal_role": str(goal_role),
                 "corridor_width": float(corridor_width),
                 "corridor_min_width": float(config.warmup_corridor_min_width()),
                 "warmup_progress": _warmup_progress(options),
                 "turn_count": int(turn_count),
                 "centerline_points": len(centerline),
+                "bay_heading": float(bay_heading),
+                "bay_mouth": (float(bay_mouth.x), float(bay_mouth.y)),
+                "start_bay_mouth": (float(bay_mouth.x), float(bay_mouth.y)) if start_role == "bay" else None,
+                "goal_bay_mouth": (float(bay_mouth.x), float(bay_mouth.y)) if goal_role == "bay" else None,
+                "bay_exit_progress_m": float(bay_stage_progress_m),
+                "bay_entry_progress_m": float(bay_stage_progress_m),
             },
         )
+
+    def _warmup_corridor_endpoint_goal(
+        self,
+        centerline: List[Tuple[float, float]],
+        start_xy: Tuple[float, float],
+    ) -> ArticulatedState:
+        if len(centerline) < 2:
+            raise RuntimeError("warmup centerline must contain at least two points")
+        start = np.asarray(start_xy, dtype=np.float64)
+        first = np.asarray(centerline[0], dtype=np.float64)
+        second = np.asarray(centerline[1], dtype=np.float64)
+        last = np.asarray(centerline[-1], dtype=np.float64)
+        prev = np.asarray(centerline[-2], dtype=np.float64)
+        if float(np.linalg.norm(last - start)) >= float(np.linalg.norm(first - start)):
+            point = last
+            direction = last - prev
+        else:
+            point = first
+            direction = first - second
+        if float(np.linalg.norm(direction)) < 1e-6:
+            direction = np.array([1.0, 0.0], dtype=np.float64)
+        heading = float(np.arctan2(float(direction[1]), float(direction[0])))
+        return ArticulatedState(float(point[0]), float(point[1]), heading, heading)
 
     def _random_centerline(
         self,
@@ -360,8 +426,8 @@ class BaselineInspiredSceneFactory:
             free_shapes.append(main_corridor)
             candidates.extend(
                 [
-                    _PoseCandidate(center_x, world_min + margin + rear_clearance, float(np.pi / 2.0)),
-                    _PoseCandidate(center_x, world_max - margin - rear_clearance, float(-np.pi / 2.0)),
+                    _PoseCandidate(center_x, world_min + margin + rear_clearance, float(np.pi / 2.0), role="corridor"),
+                    _PoseCandidate(center_x, world_max - margin - rear_clearance, float(-np.pi / 2.0), role="corridor"),
                 ]
             )
 
@@ -376,7 +442,7 @@ class BaselineInspiredSceneFactory:
                 branch = box(min(center_x, end_x), branch_y - corridor_width * 0.5, max(center_x, end_x), branch_y + corridor_width * 0.5)
                 free_shapes.append(branch)
                 heading = 0.0 if direction > 0 else float(np.pi)
-                candidates.append(_PoseCandidate(end_x - direction * front_clearance, branch_y, heading))
+                candidates.append(_PoseCandidate(end_x - direction * front_clearance, branch_y, heading, role="corridor"))
 
                 if bay_count > 0:
                     bay_count -= 1
@@ -397,7 +463,15 @@ class BaselineInspiredSceneFactory:
                     free_shapes.append(bay)
                     bay_heading = float(np.pi / 2.0) if bay_dir > 0 else float(-np.pi / 2.0)
                     bay_goal_y = branch_y + bay_dir * max(front_clearance, bay_depth - front_clearance)
-                    candidates.append(_PoseCandidate(end_x, bay_goal_y, bay_heading))
+                    candidates.append(
+                        _PoseCandidate(
+                            end_x,
+                            bay_goal_y,
+                            bay_heading,
+                            role="bay",
+                            bay_mouth=(float(end_x), float(branch_y)),
+                        )
+                    )
 
             free_space = unary_union(free_shapes).buffer(0)
             obstacles = tuple(_extract_polygons(world.difference(free_space).buffer(0)))
@@ -425,6 +499,12 @@ class BaselineInspiredSceneFactory:
                     "free_shape_count": len(free_shapes),
                     "valid_candidate_count": len(valid_candidates),
                     "aligned_to": "ppo_articulated_vehicle",
+                    "start_role": str(start.role),
+                    "goal_role": str(goal.role),
+                    "start_bay_mouth": start.bay_mouth if str(start.role) == "bay" else None,
+                    "goal_bay_mouth": goal.bay_mouth if str(goal.role) == "bay" else None,
+                    "bay_exit_progress_m": float(max(self._rear_reach(), self._front_reach())),
+                    "bay_entry_progress_m": float(max(self._rear_reach(), self._front_reach())),
                 },
             )
         raise RuntimeError("failed to sample block mixing scene")
@@ -441,18 +521,31 @@ class BaselineInspiredSceneFactory:
             raise RuntimeError("insufficient pose candidates")
         low, high = float(pair_distance_range[0]), float(pair_distance_range[1])
         min_heading_deg, max_heading_deg = float(pair_heading_diff_range_deg[0]), float(pair_heading_diff_range_deg[1])
-        for _ in range(256):
-            start = candidate_list[int(rng.integers(0, len(candidate_list)))]
-            goal = candidate_list[int(rng.integers(0, len(candidate_list)))]
-            if start is goal:
-                continue
-            dist = float(np.hypot(goal.x - start.x, goal.y - start.y))
-            if dist < low or dist > high:
-                continue
-            heading_diff_deg = abs(float(np.rad2deg(wrap_to_pi(goal.heading - start.heading))))
-            if heading_diff_deg < min_heading_deg or heading_diff_deg > max_heading_deg:
-                continue
-            return start, goal
-        start = candidate_list[0]
-        goal = max(candidate_list[1:], key=lambda item: float(np.hypot(item.x - start.x, item.y - start.y)))
+        bay_candidates = [candidate for candidate in candidate_list if str(candidate.role) == "bay"]
+        group_pairs: List[Tuple[List[_PoseCandidate], List[_PoseCandidate]]] = []
+        if len(bay_candidates) >= 2:
+            group_pairs.append((bay_candidates, bay_candidates))
+        if len(bay_candidates) >= 1:
+            group_pairs.append((bay_candidates, candidate_list))
+        group_pairs.append((candidate_list, candidate_list))
+
+        for starts, goals in group_pairs:
+            for _ in range(256):
+                start = starts[int(rng.integers(0, len(starts)))]
+                goal = goals[int(rng.integers(0, len(goals)))]
+                if start is goal:
+                    continue
+                dist = float(np.hypot(goal.x - start.x, goal.y - start.y))
+                if dist < low or dist > high:
+                    continue
+                heading_diff_deg = abs(float(np.rad2deg(wrap_to_pi(goal.heading - start.heading))))
+                if heading_diff_deg < min_heading_deg or heading_diff_deg > max_heading_deg:
+                    continue
+                return start, goal
+
+        start = bay_candidates[0] if len(bay_candidates) > 0 else candidate_list[0]
+        goal = max(
+            (candidate for candidate in candidate_list if candidate is not start),
+            key=lambda item: float(np.hypot(item.x - start.x, item.y - start.y)),
+        )
         return start, goal

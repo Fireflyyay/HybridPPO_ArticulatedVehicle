@@ -148,6 +148,7 @@ class ParameterizedPrimitiveExecutor:
         for _ in range(max_steps):
             raw_control = self._semantic_control(spec, current_state, parameter_map, context)
             control = self._blend_control(previous_control, raw_control, smoothness)
+            control = self._limit_aware_control(state=current_state, control=control, context=context)
             next_state = self.kinematics.step(current_state, control)
             travelled_distance += float(np.hypot(next_state.x - current_state.x, next_state.y - current_state.y))
             elapsed_time += float(self.vehicle_config.step_seconds)
@@ -226,6 +227,132 @@ class ParameterizedPrimitiveExecutor:
             articulation_rate=alpha * previous.articulation_rate + (1.0 - alpha) * current.articulation_rate,
             speed=alpha * previous.speed + (1.0 - alpha) * current.speed,
         )
+
+    def _limit_aware_control(self, state: ArticulatedState, control: LowLevelControl, context: PrimitiveExecutionContext) -> LowLevelControl:
+        articulation = float(state.articulation_angle)
+        guard_limit = max(0.0, float(self.vehicle_config.articulation_limit_rad) - float(self.executor_config.articulation_guard_margin_rad))
+        if abs(articulation) < guard_limit - 1e-6:
+            return control
+        if articulation * float(control.articulation_rate) <= 0.0:
+            return control
+        if self._control_respects_articulation_limit(state, control):
+            return control
+
+        candidate_controls = []
+        clipped_control = self._largest_safe_same_direction_control(state, control)
+        if clipped_control is not None:
+            candidate_controls.append(clipped_control)
+        candidate_controls.extend(self._articulation_recovery_candidates(state=state, control=control))
+        return self._best_limit_aware_control(
+            state=state,
+            requested_control=control,
+            fallback_control=control,
+            candidate_controls=candidate_controls,
+            context=context,
+        )
+
+    def _control_respects_articulation_limit(self, state: ArticulatedState, control: LowLevelControl) -> bool:
+        next_state, diagnostics = self.kinematics.step_with_diagnostics(state, control)
+        return (not bool(diagnostics.saturated_articulation)) and abs(float(next_state.articulation_angle)) < float(self.vehicle_config.articulation_limit_rad) - 1e-6
+
+    def _largest_safe_same_direction_control(self, state: ArticulatedState, control: LowLevelControl) -> Optional[LowLevelControl]:
+        articulation_rate = float(control.articulation_rate)
+        if abs(articulation_rate) <= 1e-6:
+            return None
+
+        best: Optional[LowLevelControl] = None
+        if self._control_respects_articulation_limit(state, LowLevelControl(articulation_rate=0.0, speed=float(control.speed))):
+            best = LowLevelControl(articulation_rate=0.0, speed=float(control.speed))
+
+        low = 0.0
+        high = 1.0
+        for _ in range(7):
+            scale = 0.5 * (low + high)
+            candidate = LowLevelControl(articulation_rate=scale * articulation_rate, speed=float(control.speed))
+            if self._control_respects_articulation_limit(state, candidate):
+                best = candidate
+                low = scale
+            else:
+                high = scale
+        return best
+
+    def _articulation_recovery_candidates(self, state: ArticulatedState, control: LowLevelControl) -> Tuple[LowLevelControl, ...]:
+        articulation = float(state.articulation_angle)
+        direction = 1.0 if articulation >= 0.0 else -1.0
+        omega_limit = float(self.vehicle_config.articulation_rate_max)
+        requested_mag = abs(float(control.articulation_rate))
+        recovery_mag = float(min(omega_limit, max(0.25 * omega_limit, requested_mag)))
+        recovery_rate = -direction * recovery_mag
+        speed_mag = max(abs(float(control.speed)), float(self.executor_config.low_speed))
+        recovery_speed = self._choose_recovery_speed(state, recovery_rate, speed_mag)
+
+        candidates = [
+            LowLevelControl(articulation_rate=recovery_rate, speed=float(recovery_speed)),
+            LowLevelControl(articulation_rate=recovery_rate, speed=float(control.speed)),
+            LowLevelControl(articulation_rate=recovery_rate, speed=0.0),
+        ]
+        unique_candidates = []
+        seen = set()
+        for candidate in candidates:
+            key = (round(float(candidate.articulation_rate), 6), round(float(candidate.speed), 6))
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_candidates.append(candidate)
+        return tuple(unique_candidates)
+
+    def _best_limit_aware_control(
+        self,
+        state: ArticulatedState,
+        requested_control: LowLevelControl,
+        fallback_control: LowLevelControl,
+        candidate_controls: Sequence[LowLevelControl],
+        context: PrimitiveExecutionContext,
+    ) -> LowLevelControl:
+        best_control = fallback_control
+        best_score = self._preview_control_score(state, requested_control, fallback_control, context)
+        for candidate in candidate_controls:
+            candidate_score = self._preview_control_score(state, requested_control, candidate, context)
+            if candidate_score < best_score:
+                best_control = candidate
+                best_score = candidate_score
+        return best_control
+
+    def _preview_control_score(
+        self,
+        state: ArticulatedState,
+        requested_control: LowLevelControl,
+        control: LowLevelControl,
+        context: PrimitiveExecutionContext,
+    ) -> Tuple[int, int, float, float, float, float]:
+        next_state, diagnostics = self.kinematics.step_with_diagnostics(state, control)
+        next_articulation = abs(float(next_state.articulation_angle))
+        saturated = bool(diagnostics.saturated_articulation or next_articulation >= float(self.vehicle_config.articulation_limit_rad) - 1e-6)
+        heading_error = abs(float(self._heading_error(next_state, context)))
+        goal_distance = 0.0
+        if context.goal_position is not None:
+            goal_distance = float(np.hypot(next_state.x - context.goal_position[0], next_state.y - context.goal_position[1]))
+        articulation_delta = abs(float(control.articulation_rate) - float(requested_control.articulation_rate))
+        return (
+            int(saturated),
+            int(self._limit_aware_direction_rank(requested_control, control, next_articulation)),
+            float(heading_error),
+            float(goal_distance),
+            float(next_articulation),
+            float(articulation_delta),
+        )
+
+    def _limit_aware_direction_rank(self, requested_control: LowLevelControl, control: LowLevelControl, next_articulation: float) -> int:
+        candidate_rate = float(control.articulation_rate)
+        if abs(candidate_rate) <= 1e-6:
+            return 1
+        if candidate_rate * float(requested_control.articulation_rate) > 0.0:
+            limit_margin = float(self.vehicle_config.articulation_limit_rad) - float(next_articulation)
+            preferred_margin = max(1e-3, 0.02 * float(self.executor_config.articulation_guard_margin_rad))
+            if limit_margin <= preferred_margin:
+                return 3
+            return 0
+        return 2
 
     def _termination_reason(self, spec: PrimitiveSpec, state: ArticulatedState, travelled_distance: float, elapsed_time: float, parameter_map: Mapping[str, float], context: PrimitiveExecutionContext) -> str:
         articulation_limit = float(self.vehicle_config.articulation_limit_rad)

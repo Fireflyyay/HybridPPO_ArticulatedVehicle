@@ -44,7 +44,7 @@ class ExperimentTrainer:
         self.curriculum = SuccessBandCurriculum(config.schedule, seed=int(config.seed))
         proxy_sidecar = None
         proxy_sidecar_path = str(config.proxy_safety.sidecar_path).strip()
-        if proxy_sidecar_path:
+        if bool(config.agent.soft_mask_enabled) and proxy_sidecar_path:
             proxy_sidecar = load_proxy_safety_sidecar(proxy_sidecar_path)
         self.primitive_library = build_default_primitive_library(proxy_sidecar=proxy_sidecar)
         self.agent = HybridPPOAgent(
@@ -155,6 +155,7 @@ class ExperimentTrainer:
                         "final_goal_distance": summary.final_goal_distance,
                         "action_diagnostics": summary.action_diagnostics,
                         "curriculum": self.curriculum.metrics(),
+                        "start_min_lidar_norm": float(summary.start_min_lidar_norm),
                     },
                 )
 

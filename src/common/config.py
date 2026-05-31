@@ -52,7 +52,7 @@ class HybridPPOConfig:
     mini_batch_size: int = 64
     update_epochs: int = 10
     std_floor: float = 0.05
-    soft_mask_enabled: bool = True
+    soft_mask_enabled: bool = False
     soft_mask_gamma: float = 1.0
     soft_mask_eps: float = 1e-4
     soft_mask_logit_scale: float = 1.0
@@ -76,7 +76,7 @@ class ParameterBoundsConfig:
     bounds: Dict[str, Tuple[float, float]] = field(
         default_factory=lambda: {
             "path_length": (0.3, 10.0),
-            "duration": (0.2, 4.0),
+            "duration": (0.2, 10.0),
             "speed_scale": (0.15, 1.0),
             "omega_scale": (0.05, 1.0),
             "phi_target": (-0.55, 0.55),

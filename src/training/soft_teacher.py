@@ -16,7 +16,9 @@ class TeacherAdvice:
     action_probs: np.ndarray
     parameter_targets: np.ndarray
     weight: float
-    diagnostics: Dict[str, float]
+    diagnostics: Dict[str, object]
+    reference_goal_position: Optional[Tuple[float, float]] = None
+    reference_goal_heading: Optional[float] = None
 
 
 class CoarseGuidanceSoftTeacher:
@@ -24,7 +26,6 @@ class CoarseGuidanceSoftTeacher:
     _SCORE_TEMPERATURE = 0.35
     _MAX_WEIGHT = 0.65
     _BASE_ACTIVATION = 0.18
-    _COLLISION_PENALTY = 6.0
     _ARTICULATION_LIMIT_PENALTY = 2.5
     _REVERSE_SWITCH_PENALTY = 0.25
     _STALL_PENALTY = 0.25
@@ -305,6 +306,8 @@ class CoarseGuidanceSoftTeacher:
         collision = bool(rollout.termination_reason == "collision")
         if context.collision_checker is not None:
             collision = collision or any(bool(context.collision_checker(state)) for state in scored_states)
+        if collision:
+            return -1e9
 
         near_goal_factor = float(
             np.clip(
@@ -332,8 +335,6 @@ class CoarseGuidanceSoftTeacher:
         if reached_success:
             score += 12.0
 
-        if collision:
-            score -= self._COLLISION_PENALTY
         if rollout.termination_reason == "articulation_limit":
             score -= self._ARTICULATION_LIMIT_PENALTY
         if self._is_invalid_reverse_switch(action_id, previous_action_id) and best_progress < 0.20 and terminal_heading_improvement < 0.10:

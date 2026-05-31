@@ -1,0 +1,4298 @@
+[
+  {
+    "variant": "default",
+    "seed": 10045,
+    "start": {
+      "x": 11.891670989431379,
+      "y": -13.691404078381865,
+      "heading": 0.0,
+      "min_clearance_m": 4.000000208616257,
+      "path_progress_m": 0.29481044679499674
+    },
+    "goal": {
+      "x": -8.735422960541975,
+      "y": 20.513997452653655,
+      "heading": 3.141592653589793
+    },
+    "scene_metadata": {
+      "scene_type": "block_mixing_plant",
+      "corridor_width": 8.0,
+      "free_shape_count": 7,
+      "valid_candidate_count": 6,
+      "aligned_to": "ppo_articulated_vehicle"
+    },
+    "macro_trace": [
+      {
+        "macro_idx": 1,
+        "semantic": "reverse-right",
+        "primitive_id": 3,
+        "tau": 15,
+        "reward": 2.1325450022460832,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.7948848467100778,
+        "reference_goal_position": [
+          5.737258300203047,
+          -11.737258300203045
+        ],
+        "state_before": [
+          11.891670989431379,
+          -13.691404078381865,
+          0.0
+        ],
+        "state_after": [
+          8.834386799767657,
+          -13.738992658386024,
+          -0.05850660623665238
+        ],
+        "displacement_from_start_m": 3.057654540544856,
+        "path_progress_before_m": 0.29481044679499674,
+        "path_progress_after_m": 3.579826762605438,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 2,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 3,
+        "reward": 0.06575599812236155,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.4720734707671785,
+        "reference_goal_position": [
+          4.0,
+          -9.042640687119286
+        ],
+        "state_before": [
+          8.834386799767657,
+          -13.738992658386024,
+          -0.05850660623665238
+        ],
+        "state_after": [
+          8.628362118116092,
+          -13.750905822137277,
+          0.19113532745350437
+        ],
+        "displacement_from_start_m": 3.263851290594439,
+        "path_progress_before_m": 3.579826762605438,
+        "path_progress_after_m": 3.785851444257003,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 3,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.006793285775188109,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.4720734707671785,
+        "reference_goal_position": [
+          4.0,
+          -9.042640687119286
+        ],
+        "state_before": [
+          8.628362118116092,
+          -13.750905822137277,
+          0.19113532745350437
+        ],
+        "state_after": [
+          8.584746895734902,
+          -13.759190666913051,
+          0.18258860300679025
+        ],
+        "displacement_from_start_m": 3.3076187783744007,
+        "path_progress_before_m": 3.785851444257003,
+        "path_progress_after_m": 3.8294666666381927,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 4,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.008636510562674251,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.4720734707671785,
+        "reference_goal_position": [
+          4.0,
+          -9.042640687119286
+        ],
+        "state_before": [
+          8.584746895734902,
+          -13.759190666913051,
+          0.18258860300679025
+        ],
+        "state_after": [
+          8.542992974380343,
+          -13.766759318114934,
+          0.17441935649208817
+        ],
+        "displacement_from_start_m": 3.349525766528953,
+        "path_progress_before_m": 3.8294666666381927,
+        "path_progress_after_m": 3.8712205879927515,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 5,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.008541013322448134,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.4720734707671785,
+        "reference_goal_position": [
+          4.0,
+          -9.042640687119286
+        ],
+        "state_before": [
+          8.542992974380343,
+          -13.766759318114934,
+          0.17441935649208817
+        ],
+        "state_after": [
+          8.501143223195351,
+          -13.773992620859778,
+          0.1662431990220714
+        ],
+        "displacement_from_start_m": 3.391533488109191,
+        "path_progress_before_m": 3.8712205879927515,
+        "path_progress_after_m": 3.913070339177744,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 6,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.009534863131631852,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.4720734707671785,
+        "reference_goal_position": [
+          4.0,
+          -9.042640687119286
+        ],
+        "state_before": [
+          8.501143223195351,
+          -13.773992620859778,
+          0.1662431990220714
+        ],
+        "state_after": [
+          8.460297231750738,
+          -13.780712445137812,
+          0.15827403306410304
+        ],
+        "displacement_from_start_m": 3.4325357753812233,
+        "path_progress_before_m": 3.913070339177744,
+        "path_progress_after_m": 3.9539163306223566,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 7,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.009228364440898341,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.249719057455211,
+        "reference_goal_position": [
+          4.0,
+          -8.042640687119286
+        ],
+        "state_before": [
+          8.460297231750738,
+          -13.780712445137812,
+          0.15827403306410304
+        ],
+        "state_after": [
+          8.419142347023579,
+          -13.787145831561938,
+          0.15025488481796634
+        ],
+        "displacement_from_start_m": 3.47384824879334,
+        "path_progress_before_m": 3.9539163306223566,
+        "path_progress_after_m": 3.9950712153495163,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 8,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.008935945731584448,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.249719057455211,
+        "reference_goal_position": [
+          4.0,
+          -8.042640687119286
+        ],
+        "state_before": [
+          8.419142347023579,
+          -13.787145831561938,
+          0.15025488481796634
+        ],
+        "state_after": [
+          8.37769276551227,
+          -13.793284386050654,
+          0.14218818919516707
+        ],
+        "displacement_from_start_m": 3.515454814852323,
+        "path_progress_before_m": 3.9950712153495163,
+        "path_progress_after_m": 4.036520796860825,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 9,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.008993789888354144,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.249719057455211,
+        "reference_goal_position": [
+          4.0,
+          -8.042640687119286
+        ],
+        "state_before": [
+          8.37769276551227,
+          -13.793284386050654,
+          0.14218818919516707
+        ],
+        "state_after": [
+          8.33630202246755,
+          -13.799073767914418,
+          0.13414228531490213
+        ],
+        "displacement_from_start_m": 3.5569989110616107,
+        "path_progress_before_m": 4.036520796860825,
+        "path_progress_after_m": 4.0779115399055454,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 10,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.009012991139276606,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.249719057455211,
+        "reference_goal_position": [
+          4.0,
+          -8.042640687119286
+        ],
+        "state_before": [
+          8.33630202246755,
+          -13.799073767914418,
+          0.13414228531490213
+        ],
+        "state_after": [
+          8.294931084001888,
+          -13.804521587626068,
+          0.12610900641183198
+        ],
+        "displacement_from_start_m": 3.5985182392488375,
+        "path_progress_before_m": 4.0779115399055454,
+        "path_progress_after_m": 4.119282478371207,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 11,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.008779337746899853,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.249719057455211,
+        "reference_goal_position": [
+          4.0,
+          -8.042640687119286
+        ],
+        "state_before": [
+          8.294931084001888,
+          -13.804521587626068,
+          0.12610900641183198
+        ],
+        "state_after": [
+          8.253324698825551,
+          -13.809660099724939,
+          0.11803830096256407
+        ],
+        "displacement_from_start_m": 3.6402676023816,
+        "path_progress_before_m": 4.119282478371207,
+        "path_progress_after_m": 4.160888863547544,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 12,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.00876995867820685,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.249719057455211,
+        "reference_goal_position": [
+          4.0,
+          -8.042640687119286
+        ],
+        "state_before": [
+          8.253324698825551,
+          -13.809660099724939,
+          0.11803830096256407
+        ],
+        "state_after": [
+          8.21170922128494,
+          -13.814459179061448,
+          0.10997360538842926
+        ],
+        "displacement_from_start_m": 3.6820186274410305,
+        "path_progress_before_m": 4.160888863547544,
+        "path_progress_after_m": 4.202504341088155,
+        "done_reason": "running"
+      }
+    ],
+    "summary": {
+      "macro_steps_recorded": 12,
+      "terminated": false,
+      "truncated": false,
+      "done_reason": "running",
+      "final_goal_distance": 38.28378539151866,
+      "final_path_progress_m": 4.202504341088155,
+      "final_displacement_from_start_m": 3.6820186274410305
+    }
+  },
+  {
+    "variant": "default",
+    "seed": 10054,
+    "start": {
+      "x": -7.906132819433627,
+      "y": -14.004851322880327,
+      "heading": 3.141592653589793,
+      "min_clearance_m": 4.000000208616257,
+      "path_progress_m": 0.06980452321574927
+    },
+    "goal": {
+      "x": 2.7330352173618504,
+      "y": -31.55,
+      "heading": 1.5707963267948966
+    },
+    "scene_metadata": {
+      "scene_type": "block_mixing_plant",
+      "corridor_width": 8.0,
+      "free_shape_count": 8,
+      "valid_candidate_count": 7,
+      "aligned_to": "ppo_articulated_vehicle"
+    },
+    "macro_trace": [
+      {
+        "macro_idx": 1,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 12,
+        "reward": 1.6563445793657632,
+        "escape_active_before": true,
+        "reference_goal_heading": -0.14631375437226773,
+        "reference_goal_position": [
+          -1.2142135623730947,
+          -15.0
+        ],
+        "state_before": [
+          -7.906132819433627,
+          -14.004851322880327,
+          3.141592653589793
+        ],
+        "state_after": [
+          -5.811679745824207,
+          -13.859915919361713,
+          3.1253121302159474
+        ],
+        "displacement_from_start_m": 2.0994618235979075,
+        "path_progress_before_m": 0.06980452321574927,
+        "path_progress_after_m": 2.6025338165488883,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 2,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 14,
+        "reward": 1.6981529753617581,
+        "escape_active_before": true,
+        "reference_goal_heading": -0.12327112442655189,
+        "reference_goal_position": [
+          0.848528137423856,
+          -15.848528137423855
+        ],
+        "state_before": [
+          -5.811679745824207,
+          -13.859915919361713,
+          3.1253121302159474
+        ],
+        "state_after": [
+          -3.1615143271194253,
+          -14.207351803607901,
+          2.8967162348361235
+        ],
+        "displacement_from_start_m": 4.748937889918627,
+        "path_progress_before_m": 2.6025338165488883,
+        "path_progress_after_m": 5.25269923525367,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 3,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 16,
+        "reward": 1.4091385238227545,
+        "escape_active_before": true,
+        "reference_goal_heading": -0.5932786368603051,
+        "reference_goal_position": [
+          2.0,
+          -18.371572875253808
+        ],
+        "state_before": [
+          -3.1615143271194253,
+          -14.207351803607901,
+          2.8967162348361235
+        ],
+        "state_after": [
+          -0.6992933413618773,
+          -15.117380050245263,
+          2.675096868796043
+        ],
+        "displacement_from_start_m": 7.292205114497653,
+        "path_progress_before_m": 5.25269923525367,
+        "path_progress_after_m": 7.7149202210112175,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 4,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 11,
+        "reward": -0.520381298336333,
+        "escape_active_before": false,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          2.7330352173618504,
+          -31.55
+        ],
+        "state_before": [
+          -0.6992933413618773,
+          -15.117380050245263,
+          2.675096868796043
+        ],
+        "state_after": [
+          -3.1947816549853023,
+          -14.681757558793928,
+          -3.1024125818517474
+        ],
+        "displacement_from_start_m": 4.759730228381363,
+        "path_progress_before_m": 7.7149202210112175,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 5,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 1,
+        "reward": -0.04765435948598895,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.0614539629144046,
+        "reference_goal_position": [
+          2.0,
+          -20.371572875253808
+        ],
+        "state_before": [
+          -3.1947816549853023,
+          -14.681757558793928,
+          -3.1024125818517474
+        ],
+        "state_after": [
+          -3.1556381481917786,
+          -14.679453609908702,
+          -3.0532856018065497
+        ],
+        "displacement_from_start_m": 4.798154631434997,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 6,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 1,
+        "reward": -0.0503531732918582,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.0614539629144046,
+        "reference_goal_position": [
+          2.0,
+          -20.371572875253808
+        ],
+        "state_before": [
+          -3.1556381481917786,
+          -14.679453609908702,
+          -3.0532856018065497
+        ],
+        "state_after": [
+          -3.1159439351433753,
+          -14.676057525665497,
+          -3.060682445934188
+        ],
+        "displacement_from_start_m": 4.83698535389918,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 7,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 1,
+        "reward": -0.05034918969140133,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.0614539629144046,
+        "reference_goal_position": [
+          2.0,
+          -20.371572875253808
+        ],
+        "state_before": [
+          -3.1159439351433753,
+          -14.676057525665497,
+          -3.060682445934188
+        ],
+        "state_after": [
+          -3.0766737883561555,
+          -14.672988826007984,
+          -3.0679958577289597
+        ],
+        "displacement_from_start_m": 4.875457133022647,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 8,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 1,
+        "reward": -0.0503497708851385,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.0614539629144046,
+        "reference_goal_position": [
+          2.0,
+          -20.371572875253808
+        ],
+        "state_before": [
+          -3.0766737883561555,
+          -14.672988826007984,
+          -3.0679958577289597
+        ],
+        "state_after": [
+          -3.037316838907821,
+          -14.670202966842542,
+          -3.075321442016898
+        ],
+        "displacement_from_start_m": 4.914067751094473,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 9,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 1,
+        "reward": -0.050350361707086344,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.0614539629144046,
+        "reference_goal_position": [
+          2.0,
+          -20.371572875253808
+        ],
+        "state_before": [
+          -3.037316838907821,
+          -14.670202966842542,
+          -3.075321442016898
+        ],
+        "state_after": [
+          -2.997874012318449,
+          -14.667701469090774,
+          -3.0826594004507752
+        ],
+        "displacement_from_start_m": 4.952814839457955,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 5.416339550054646,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 10,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 1,
+        "reward": -0.050350875163415215,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.0614539629144046,
+        "reference_goal_position": [
+          2.0,
+          -20.371572875253808
+        ],
+        "state_before": [
+          -2.997874012318449,
+          -14.667701469090774,
+          -3.0826594004507752
+        ],
+        "state_after": [
+          -2.9583560536887004,
+          -14.66548639421348,
+          -3.0900081126888574
+        ],
+        "displacement_from_start_m": 4.9916864506017085,
+        "path_progress_before_m": 5.416339550054646,
+        "path_progress_after_m": 5.455857508684394,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 11,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 6,
+        "reward": -0.29778106127046305,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.0614539629144046,
+        "reference_goal_position": [
+          2.0,
+          -20.371572875253808
+        ],
+        "state_before": [
+          -2.9583560536887004,
+          -14.66548639421348,
+          -3.0900081126888574
+        ],
+        "state_after": [
+          -3.6912240937358702,
+          -14.575472926948763,
+          2.9227611458119815
+        ],
+        "displacement_from_start_m": 4.253359211375489,
+        "path_progress_before_m": 5.455857508684394,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 12,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 16,
+        "reward": -0.6929494385283015,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.0614539629144046,
+        "reference_goal_position": [
+          2.0,
+          -20.371572875253808
+        ],
+        "state_before": [
+          -3.6912240937358702,
+          -14.575472926948763,
+          2.9227611458119815
+        ],
+        "state_after": [
+          -0.9540725515064393,
+          -15.11950560581189,
+          2.8421055145059855
+        ],
+        "displacement_from_start_m": 7.0408519469840805,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 7.460141010866655,
+        "done_reason": "running"
+      }
+    ],
+    "summary": {
+      "macro_steps_recorded": 12,
+      "terminated": false,
+      "truncated": false,
+      "done_reason": "running",
+      "final_goal_distance": 16.839118437041048,
+      "final_path_progress_m": 7.460141010866655,
+      "final_displacement_from_start_m": 7.0408519469840805
+    }
+  },
+  {
+    "variant": "default",
+    "seed": 10055,
+    "start": {
+      "x": -13.886812088823678,
+      "y": -14.381760131956074,
+      "heading": 3.141592653589793,
+      "min_clearance_m": 4.000000208616257,
+      "path_progress_m": 0.34998111763392925
+    },
+    "goal": {
+      "x": -4.322786626217814,
+      "y": -31.55,
+      "heading": 1.5707963267948966
+    },
+    "scene_metadata": {
+      "scene_type": "block_mixing_plant",
+      "corridor_width": 8.0,
+      "free_shape_count": 6,
+      "valid_candidate_count": 5,
+      "aligned_to": "ppo_articulated_vehicle"
+    },
+    "macro_trace": [
+      {
+        "macro_idx": 1,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 10,
+        "reward": 1.0772899156803846,
+        "escape_active_before": true,
+        "reference_goal_heading": -0.2329879803285119,
+        "reference_goal_position": [
+          -7.444365081389595,
+          -15.555634918610405
+        ],
+        "state_before": [
+          -13.886812088823678,
+          -14.381760131956074,
+          3.141592653589793
+        ],
+        "state_after": [
+          -12.337956043341626,
+          -14.223015921710878,
+          -3.109082341485067
+        ],
+        "displacement_from_start_m": 1.556969740846839,
+        "path_progress_before_m": 0.34998111763392925,
+        "path_progress_after_m": 2.0762575190314694,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 2,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 11,
+        "reward": 1.2149706822314945,
+        "escape_active_before": true,
+        "reference_goal_heading": -0.34670780687971486,
+        "reference_goal_position": [
+          -5.737258300203049,
+          -17.26274169979695
+        ],
+        "state_before": [
+          -12.337956043341626,
+          -14.223015921710878,
+          -3.109082341485067
+        ],
+        "state_after": [
+          -10.423993283784434,
+          -14.33852282473366,
+          2.9875826148996225
+        ],
+        "displacement_from_start_m": 3.463088728471921,
+        "path_progress_before_m": 2.0762575190314694,
+        "path_progress_after_m": 3.9902202785886614,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 3,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 14,
+        "reward": 1.4239017685941338,
+        "escape_active_before": true,
+        "reference_goal_heading": -0.669519182822615,
+        "reference_goal_position": [
+          -5.0,
+          -18.957359312880715
+        ],
+        "state_before": [
+          -10.423993283784434,
+          -14.33852282473366,
+          2.9875826148996225
+        ],
+        "state_after": [
+          -8.079341730129956,
+          -14.980265683390758,
+          2.752895511733483
+        ],
+        "displacement_from_start_m": 5.838229257420808,
+        "path_progress_before_m": 3.9902202785886614,
+        "path_progress_after_m": 6.334871832243139,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 4,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 3,
+        "reward": -0.1377161799059102,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.1042897586670355,
+        "reference_goal_position": [
+          -5.0,
+          -20.957359312880712
+        ],
+        "state_before": [
+          -8.079341730129956,
+          -14.980265683390758,
+          2.752895511733483
+        ],
+        "state_after": [
+          -8.425661571403413,
+          -14.878356278726914,
+          2.952053156135224
+        ],
+        "displacement_from_start_m": 5.483682403905907,
+        "path_progress_before_m": 6.334871832243139,
+        "path_progress_after_m": 5.988551990969682,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 5,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 8,
+        "reward": -0.3731726862828909,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.1042897586670355,
+        "reference_goal_position": [
+          -5.0,
+          -20.957359312880712
+        ],
+        "state_before": [
+          -8.425661571403413,
+          -14.878356278726914,
+          2.952053156135224
+        ],
+        "state_after": [
+          -9.631702010248542,
+          -14.5983237159497,
+          2.956422278047513
+        ],
+        "displacement_from_start_m": 4.260617510021741,
+        "path_progress_before_m": 5.988551990969682,
+        "path_progress_after_m": 4.782511552124553,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 6,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 15,
+        "reward": 0.022471229614834234,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.1042897586670355,
+        "reference_goal_position": [
+          -5.0,
+          -20.957359312880712
+        ],
+        "state_before": [
+          -9.631702010248542,
+          -14.5983237159497,
+          2.956422278047513
+        ],
+        "state_after": [
+          -7.256295334194806,
+          -15.378838035650313,
+          2.7025210438975806
+        ],
+        "displacement_from_start_m": 6.705066500747736,
+        "path_progress_before_m": 4.782511552124553,
+        "path_progress_after_m": 7.20797111874375,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 7,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 10,
+        "reward": -0.4431607305531168,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.266641769406767,
+        "reference_goal_position": [
+          -5.0,
+          -22.37157287525381
+        ],
+        "state_before": [
+          -7.256295334194806,
+          -15.378838035650313,
+          2.7025210438975806
+        ],
+        "state_after": [
+          -8.641236577327438,
+          -15.042455751570147,
+          3.021922662402691
+        ],
+        "displacement_from_start_m": 5.287020063191198,
+        "path_progress_before_m": 7.20797111874375,
+        "path_progress_after_m": 5.7729769850456565,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 8,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 7,
+        "reward": -0.33657485861956116,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.266641769406767,
+        "reference_goal_position": [
+          -5.0,
+          -22.37157287525381
+        ],
+        "state_before": [
+          -8.641236577327438,
+          -15.042455751570147,
+          3.021922662402691
+        ],
+        "state_after": [
+          -9.529754596323288,
+          -14.828505532756553,
+          2.8730228638237794
+        ],
+        "displacement_from_start_m": 4.379900848888039,
+        "path_progress_before_m": 5.7729769850456565,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 9,
+        "semantic": "reverse-right",
+        "primitive_id": 3,
+        "tau": 14,
+        "reward": -0.2156524793042374,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.266641769406767,
+        "reference_goal_position": [
+          -5.0,
+          -22.37157287525381
+        ],
+        "state_before": [
+          -9.529754596323288,
+          -14.828505532756553,
+          2.8730228638237794
+        ],
+        "state_after": [
+          -6.840995661028699,
+          -15.697205957862584,
+          2.7553523199268604
+        ],
+        "displacement_from_start_m": 7.167560732570075,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 7.726752450572629,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 10,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 10,
+        "reward": -0.4466828763754876,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.266641769406767,
+        "reference_goal_position": [
+          -5.0,
+          -22.37157287525381
+        ],
+        "state_before": [
+          -6.840995661028699,
+          -15.697205957862584,
+          2.7553523199268604
+        ],
+        "state_after": [
+          -8.366360509005634,
+          -15.335527258657537,
+          2.9936480548834883
+        ],
+        "displacement_from_start_m": 5.60223681908324,
+        "path_progress_before_m": 7.726752450572629,
+        "path_progress_after_m": 6.047853053367461,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 11,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 3,
+        "reward": -0.13751581716871758,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.266641769406767,
+        "reference_goal_position": [
+          -5.0,
+          -22.37157287525381
+        ],
+        "state_before": [
+          -8.366360509005634,
+          -15.335527258657537,
+          2.9936480548834883
+        ],
+        "state_after": [
+          -8.739034341439032,
+          -15.321422520054329,
+          -3.0863702862331706
+        ],
+        "displacement_from_start_m": 5.232836815731507,
+        "path_progress_before_m": 6.047853053367461,
+        "path_progress_after_m": 5.675179220934063,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 12,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 6,
+        "reward": -0.3005497028565451,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.266641769406767,
+        "reference_goal_position": [
+          -5.0,
+          -22.37157287525381
+        ],
+        "state_before": [
+          -8.739034341439032,
+          -15.321422520054329,
+          -3.0863702862331706
+        ],
+        "state_after": [
+          -9.465698401803417,
+          -15.216040492301588,
+          2.8643100122086
+        ],
+        "displacement_from_start_m": 4.499141023930693,
+        "path_progress_before_m": 5.675179220934063,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      }
+    ],
+    "summary": {
+      "macro_steps_recorded": 12,
+      "terminated": false,
+      "truncated": false,
+      "done_reason": "running",
+      "final_goal_distance": 17.124478816319883,
+      "final_path_progress_m": 5.414213562373095,
+      "final_displacement_from_start_m": 4.499141023930693
+    }
+  },
+  {
+    "variant": "default",
+    "seed": 10056,
+    "start": {
+      "x": -9.199728269411285,
+      "y": -26.357151190639428,
+      "heading": 3.141592653589793,
+      "min_clearance_m": 4.000000208616257,
+      "path_progress_m": 0.0
+    },
+    "goal": {
+      "x": 4.214092803663276,
+      "y": 25.733521731001836,
+      "heading": 0.0
+    },
+    "scene_metadata": {
+      "scene_type": "block_mixing_plant",
+      "corridor_width": 8.0,
+      "free_shape_count": 6,
+      "valid_candidate_count": 5,
+      "aligned_to": "ppo_articulated_vehicle"
+    },
+    "macro_trace": [
+      {
+        "macro_idx": 1,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 16,
+        "reward": 1.5327051323278114,
+        "escape_active_before": true,
+        "reference_goal_heading": 0.4616253154286385,
+        "reference_goal_position": [
+          -3.0301515190165,
+          -23.0301515190165
+        ],
+        "state_before": [
+          -9.199728269411285,
+          -26.357151190639428,
+          3.141592653589793
+        ],
+        "state_after": [
+          -6.669977783166295,
+          -26.25889890653807,
+          3.100310295036861
+        ],
+        "displacement_from_start_m": 2.5316577639933677,
+        "path_progress_before_m": 0.0,
+        "path_progress_after_m": 2.7442357792068,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 2,
+        "semantic": "forward-right",
+        "primitive_id": 1,
+        "tau": 10,
+        "reward": -0.453772527719402,
+        "escape_active_before": true,
+        "reference_goal_heading": 0.8297541243353498,
+        "reference_goal_position": [
+          -3.0,
+          -20.62842712474619
+        ],
+        "state_before": [
+          -6.669977783166295,
+          -26.25889890653807,
+          3.100310295036861
+        ],
+        "state_after": [
+          -7.996029184972966,
+          -26.10101038954876,
+          3.0263402439713376
+        ],
+        "displacement_from_start_m": 1.2306500704347338,
+        "path_progress_before_m": 2.7442357792068,
+        "path_progress_after_m": 0.6384894399987766,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 3,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 14,
+        "reward": -0.0774438835220661,
+        "escape_active_before": true,
+        "reference_goal_heading": 0.8297541243353498,
+        "reference_goal_position": [
+          -3.0,
+          -20.62842712474619
+        ],
+        "state_before": [
+          -7.996029184972966,
+          -26.10101038954876,
+          3.0263402439713376
+        ],
+        "state_after": [
+          -5.99453587950832,
+          -26.268166501462126,
+          2.9912107997955104
+        ],
+        "displacement_from_start_m": 3.2064273781266057,
+        "path_progress_before_m": 0.6384894399987766,
+        "path_progress_after_m": 3.4196776828647746,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 4,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 11,
+        "reward": -0.5092457055211693,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.061453962914405,
+        "reference_goal_position": [
+          -3.0,
+          -19.62842712474619
+        ],
+        "state_before": [
+          -5.99453587950832,
+          -26.268166501462126,
+          2.9912107997955104
+        ],
+        "state_after": [
+          -7.659222658611185,
+          -26.27569554128986,
+          -3.040568004267839
+        ],
+        "displacement_from_start_m": 1.5426576288073606,
+        "path_progress_before_m": 3.4196776828647746,
+        "path_progress_after_m": 1.7549909037619102,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 5,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 11,
+        "reward": -0.5069086720986108,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.061453962914405,
+        "reference_goal_position": [
+          -3.0,
+          -19.62842712474619
+        ],
+        "state_before": [
+          -7.659222658611185,
+          -26.27569554128986,
+          -3.040568004267839
+        ],
+        "state_after": [
+          -9.278486151019443,
+          -26.61411114883804,
+          -2.8377133837015265
+        ],
+        "displacement_from_start_m": 0.26875867247930463,
+        "path_progress_before_m": 1.7549909037619102,
+        "path_progress_after_m": 1.4142135623730951,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 6,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 16,
+        "reward": -0.6789837897599156,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.061453962914405,
+        "reference_goal_position": [
+          -3.0,
+          -19.62842712474619
+        ],
+        "state_before": [
+          -9.278486151019443,
+          -26.61411114883804,
+          -2.8377133837015265
+        ],
+        "state_after": [
+          -6.673677642404636,
+          -26.280448305814893,
+          -3.1054704634014487
+        ],
+        "displacement_from_start_m": 2.527214890495284,
+        "path_progress_before_m": 1.4142135623730951,
+        "path_progress_after_m": 2.740535919968459,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 7,
+        "semantic": "forward-right",
+        "primitive_id": 1,
+        "tau": 10,
+        "reward": -0.451766535441117,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.061453962914405,
+        "reference_goal_position": [
+          -3.0,
+          -19.62842712474619
+        ],
+        "state_before": [
+          -6.673677642404636,
+          -26.280448305814893,
+          -3.1054704634014487
+        ],
+        "state_after": [
+          -7.9796130555406295,
+          -26.18360471134196,
+          3.059461651217191
+        ],
+        "displacement_from_start_m": 1.232395843710608,
+        "path_progress_before_m": 2.740535919968459,
+        "path_progress_after_m": 1.4346005068324656,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 8,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 14,
+        "reward": -0.5712783639409037,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.061453962914405,
+        "reference_goal_position": [
+          -3.0,
+          -19.62842712474619
+        ],
+        "state_before": [
+          -7.9796130555406295,
+          -26.18360471134196,
+          3.059461651217191
+        ],
+        "state_after": [
+          -5.936128531845342,
+          -26.23823578527745,
+          3.0493201340945078
+        ],
+        "displacement_from_start_m": 3.2657654723927885,
+        "path_progress_before_m": 1.4346005068324656,
+        "path_progress_after_m": 3.478085030527753,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 9,
+        "semantic": "forward-right",
+        "primitive_id": 1,
+        "tau": 11,
+        "reward": -0.49887637782093897,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.061453962914405,
+        "reference_goal_position": [
+          -3.0,
+          -19.62842712474619
+        ],
+        "state_before": [
+          -5.936128531845342,
+          -26.23823578527745,
+          3.0493201340945078
+        ],
+        "state_after": [
+          -7.641750007819694,
+          -26.062719080181168,
+          3.070254658930926
+        ],
+        "displacement_from_start_m": 1.5855555907191834,
+        "path_progress_before_m": 3.478085030527753,
+        "path_progress_after_m": 1.7724635545534009,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 10,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 13,
+        "reward": -0.5395982133831145,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.061453962914405,
+        "reference_goal_position": [
+          -3.0,
+          -19.62842712474619
+        ],
+        "state_before": [
+          -7.641750007819694,
+          -26.062719080181168,
+          3.070254658930926
+        ],
+        "state_after": [
+          -5.890972936170154,
+          -26.190794930308478,
+          3.0047201480673174
+        ],
+        "displacement_from_start_m": 3.312934690059996,
+        "path_progress_before_m": 1.7724635545534009,
+        "path_progress_after_m": 3.5232406262029405,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 11,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 11,
+        "reward": -0.5127941221107096,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.061453962914405,
+        "reference_goal_position": [
+          -3.0,
+          -19.62842712474619
+        ],
+        "state_before": [
+          -5.890972936170154,
+          -26.190794930308478,
+          3.0047201480673174
+        ],
+        "state_after": [
+          -7.620628387574348,
+          -26.313511684589386,
+          -2.947461949333827
+        ],
+        "displacement_from_start_m": 1.5797027705570819,
+        "path_progress_before_m": 3.5232406262029405,
+        "path_progress_after_m": 1.7935851747987472,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 12,
+        "semantic": "forward-right",
+        "primitive_id": 1,
+        "tau": 11,
+        "reward": -0.4861996337734624,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.061453962914405,
+        "reference_goal_position": [
+          -3.0,
+          -19.62842712474619
+        ],
+        "state_before": [
+          -7.620628387574348,
+          -26.313511684589386,
+          -2.947461949333827
+        ],
+        "state_after": [
+          -9.113394259459412,
+          -26.252079287044637,
+          3.0797435979089425
+        ],
+        "displacement_from_start_m": 0.13599141958007166,
+        "path_progress_before_m": 1.7935851747987472,
+        "path_progress_after_m": 1.4142135623730951,
+        "done_reason": "running"
+      }
+    ],
+    "summary": {
+      "macro_steps_recorded": 12,
+      "terminated": false,
+      "truncated": false,
+      "done_reason": "running",
+      "final_goal_distance": 53.66679256882432,
+      "final_path_progress_m": 1.4142135623730951,
+      "final_displacement_from_start_m": 0.13599141958007166
+    }
+  },
+  {
+    "variant": "no_escape",
+    "seed": 10045,
+    "start": {
+      "x": 11.891670989431379,
+      "y": -13.691404078381865,
+      "heading": 0.0,
+      "min_clearance_m": 4.000000208616257,
+      "path_progress_m": 0.29481044679499674
+    },
+    "goal": {
+      "x": -8.735422960541975,
+      "y": 20.513997452653655,
+      "heading": 3.141592653589793
+    },
+    "scene_metadata": {
+      "scene_type": "block_mixing_plant",
+      "corridor_width": 8.0,
+      "free_shape_count": 7,
+      "valid_candidate_count": 6,
+      "aligned_to": "ppo_articulated_vehicle"
+    },
+    "macro_trace": [
+      {
+        "macro_idx": 1,
+        "semantic": "reverse-right",
+        "primitive_id": 3,
+        "tau": 15,
+        "reward": 2.1369492493447066,
+        "escape_active_before": true,
+        "reference_goal_heading": 3.141592653589793,
+        "reference_goal_position": [
+          -8.735422960541975,
+          20.513997452653655
+        ],
+        "state_before": [
+          11.891670989431379,
+          -13.691404078381865,
+          0.0
+        ],
+        "state_after": [
+          8.834386799767657,
+          -13.738992658386024,
+          -0.05850660623665238
+        ],
+        "displacement_from_start_m": 3.057654540544856,
+        "path_progress_before_m": 0.29481044679499674,
+        "path_progress_after_m": 3.579826762605438,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 2,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 5,
+        "reward": 0.1423869921529124,
+        "escape_active_before": true,
+        "reference_goal_heading": 3.141592653589793,
+        "reference_goal_position": [
+          -8.735422960541975,
+          20.513997452653655
+        ],
+        "state_before": [
+          8.834386799767657,
+          -13.738992658386024,
+          -0.05850660623665238
+        ],
+        "state_after": [
+          8.452299795334039,
+          -13.625507553184343,
+          -0.4388351536172679
+        ],
+        "displacement_from_start_m": 3.440002407385738,
+        "path_progress_before_m": 3.579826762605438,
+        "path_progress_after_m": 3.9619137670390563,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 3,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.006929744069104049,
+        "escape_active_before": true,
+        "reference_goal_heading": 3.141592653589793,
+        "reference_goal_position": [
+          -8.735422960541975,
+          20.513997452653655
+        ],
+        "state_before": [
+          8.452299795334039,
+          -13.625507553184343,
+          -0.4388351536172679
+        ],
+        "state_after": [
+          8.408789041172263,
+          -13.605280832765786,
+          -0.42961836574007517
+        ],
+        "displacement_from_start_m": 3.483946595306057,
+        "path_progress_before_m": 3.9619137670390563,
+        "path_progress_after_m": 4.005424521200832,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 4,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.006919691432509961,
+        "escape_active_before": true,
+        "reference_goal_heading": 3.141592653589793,
+        "reference_goal_position": [
+          -8.735422960541975,
+          20.513997452653655
+        ],
+        "state_before": [
+          8.408789041172263,
+          -13.605280832765786,
+          -0.42961836574007517
+        ],
+        "state_after": [
+          8.365270006702945,
+          -13.58553520171438,
+          -0.4204387025666376
+        ],
+        "displacement_from_start_m": 3.5279898114981716,
+        "path_progress_before_m": 4.005424521200832,
+        "path_progress_after_m": 4.04894355567015,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 5,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.006663520073640916,
+        "escape_active_before": true,
+        "reference_goal_heading": 3.141592653589793,
+        "reference_goal_position": [
+          -8.735422960541975,
+          20.513997452653655
+        ],
+        "state_before": [
+          8.365270006702945,
+          -13.58553520171438,
+          -0.4204387025666376
+        ],
+        "state_after": [
+          8.32149401682418,
+          -13.566155903604532,
+          -0.41124277847097357
+        ],
+        "displacement_from_start_m": 3.5723732617154877,
+        "path_progress_before_m": 4.04894355567015,
+        "path_progress_after_m": 4.092719545548914,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 6,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.00667292553075457,
+        "escape_active_before": true,
+        "reference_goal_heading": 3.141592653589793,
+        "reference_goal_position": [
+          -8.735422960541975,
+          20.513997452653655
+        ],
+        "state_before": [
+          8.32149401682418,
+          -13.566155903604532,
+          -0.41124277847097357
+        ],
+        "state_after": [
+          8.277729304213949,
+          -13.547260174828049,
+          -0.4020860504317523
+        ],
+        "displacement_from_start_m": 3.616815169328387,
+        "path_progress_before_m": 4.092719545548914,
+        "path_progress_after_m": 4.136484258159146,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 7,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.006776756146094969,
+        "escape_active_before": true,
+        "reference_goal_heading": 3.141592653589793,
+        "reference_goal_position": [
+          -8.735422960541975,
+          20.513997452653655
+        ],
+        "state_before": [
+          8.277729304213949,
+          -13.547260174828049,
+          -0.4020860504317523
+        ],
+        "state_after": [
+          8.23407118534761,
+          -13.528881713307126,
+          -0.3929871265728888
+        ],
+        "displacement_from_start_m": 3.6612087957371564,
+        "path_progress_before_m": 4.136484258159146,
+        "path_progress_after_m": 4.1801423770254855,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 8,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.007580988870122121,
+        "escape_active_before": true,
+        "reference_goal_heading": 3.141592653589793,
+        "reference_goal_position": [
+          -8.735422960541975,
+          20.513997452653655
+        ],
+        "state_before": [
+          8.23407118534761,
+          -13.528881713307126,
+          -0.3929871265728888
+        ],
+        "state_after": [
+          8.191227017781205,
+          -13.511299009766626,
+          -0.3840912498082725
+        ],
+        "displacement_from_start_m": 3.704824344427548,
+        "path_progress_before_m": 4.1801423770254855,
+        "path_progress_after_m": 4.2229865445918895,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 9,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.007425110886931566,
+        "escape_active_before": true,
+        "reference_goal_heading": 3.141592653589793,
+        "reference_goal_position": [
+          -8.735422960541975,
+          20.513997452653655
+        ],
+        "state_before": [
+          8.191227017781205,
+          -13.511299009766626,
+          -0.3840912498082725
+        ],
+        "state_after": [
+          8.148226956125688,
+          -13.494097667026766,
+          -0.3751951297078868
+        ],
+        "displacement_from_start_m": 3.7486401601719264,
+        "path_progress_before_m": 4.2229865445918895,
+        "path_progress_after_m": 4.265986606247407,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 10,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.007570660619201745,
+        "escape_active_before": true,
+        "reference_goal_heading": 3.141592653589793,
+        "reference_goal_position": [
+          -8.735422960541975,
+          20.513997452653655
+        ],
+        "state_before": [
+          8.148226956125688,
+          -13.494097667026766,
+          -0.3751951297078868
+        ],
+        "state_after": [
+          8.105375395728789,
+          -13.477395170008219,
+          -0.36636073668648717
+        ],
+        "displacement_from_start_m": 3.792338874066363,
+        "path_progress_before_m": 4.265986606247407,
+        "path_progress_after_m": 4.308838166644306,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 11,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.008194904217643574,
+        "escape_active_before": true,
+        "reference_goal_heading": 3.141592653589793,
+        "reference_goal_position": [
+          -8.735422960541975,
+          20.513997452653655
+        ],
+        "state_before": [
+          8.105375395728789,
+          -13.477395170008219,
+          -0.36636073668648717
+        ],
+        "state_after": [
+          8.063155716777315,
+          -13.461364069095708,
+          -0.35768593623079026
+        ],
+        "displacement_from_start_m": 3.835420133286287,
+        "path_progress_before_m": 4.308838166644306,
+        "path_progress_after_m": 4.35105784559578,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 12,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.008394738478593606,
+        "escape_active_before": true,
+        "reference_goal_heading": 3.141592653589793,
+        "reference_goal_position": [
+          -8.735422960541975,
+          20.513997452653655
+        ],
+        "state_before": [
+          8.063155716777315,
+          -13.461364069095708,
+          -0.35768593623079026
+        ],
+        "state_after": [
+          8.021139204494489,
+          -13.445824457313782,
+          -0.3490808116186397
+        ],
+        "displacement_from_start_m": 3.8783147949193983,
+        "path_progress_before_m": 4.35105784559578,
+        "path_progress_after_m": 4.393074357878606,
+        "done_reason": "running"
+      }
+    ],
+    "summary": {
+      "macro_steps_recorded": 12,
+      "terminated": false,
+      "truncated": false,
+      "done_reason": "running",
+      "final_goal_distance": 37.86887745560246,
+      "final_path_progress_m": 4.393074357878606,
+      "final_displacement_from_start_m": 3.8783147949193983
+    }
+  },
+  {
+    "variant": "no_escape",
+    "seed": 10054,
+    "start": {
+      "x": -7.906132819433627,
+      "y": -14.004851322880327,
+      "heading": 3.141592653589793,
+      "min_clearance_m": 4.000000208616257,
+      "path_progress_m": 0.06980452321574927
+    },
+    "goal": {
+      "x": 2.7330352173618504,
+      "y": -31.55,
+      "heading": 1.5707963267948966
+    },
+    "scene_metadata": {
+      "scene_type": "block_mixing_plant",
+      "corridor_width": 8.0,
+      "free_shape_count": 8,
+      "valid_candidate_count": 7,
+      "aligned_to": "ppo_articulated_vehicle"
+    },
+    "macro_trace": [
+      {
+        "macro_idx": 1,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 12,
+        "reward": 1.6561322114778665,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          2.7330352173618504,
+          -31.55
+        ],
+        "state_before": [
+          -7.906132819433627,
+          -14.004851322880327,
+          3.141592653589793
+        ],
+        "state_after": [
+          -5.811679745824207,
+          -13.859915919361713,
+          3.1253121302159474
+        ],
+        "displacement_from_start_m": 2.0994618235979075,
+        "path_progress_before_m": 0.06980452321574927,
+        "path_progress_after_m": 2.6025338165488883,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 2,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 14,
+        "reward": 1.707736395663585,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          2.7330352173618504,
+          -31.55
+        ],
+        "state_before": [
+          -5.811679745824207,
+          -13.859915919361713,
+          3.1253121302159474
+        ],
+        "state_after": [
+          -3.1615143271194253,
+          -14.207351803607901,
+          2.8967162348361235
+        ],
+        "displacement_from_start_m": 4.748937889918627,
+        "path_progress_before_m": 2.6025338165488883,
+        "path_progress_after_m": 5.25269923525367,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 3,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 16,
+        "reward": 1.4272207225602291,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          2.7330352173618504,
+          -31.55
+        ],
+        "state_before": [
+          -3.1615143271194253,
+          -14.207351803607901,
+          2.8967162348361235
+        ],
+        "state_after": [
+          -0.6992933413618773,
+          -15.117380050245263,
+          2.675096868796043
+        ],
+        "displacement_from_start_m": 7.292205114497653,
+        "path_progress_before_m": 5.25269923525367,
+        "path_progress_after_m": 7.7149202210112175,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 4,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 11,
+        "reward": -0.520381298336333,
+        "escape_active_before": false,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          2.7330352173618504,
+          -31.55
+        ],
+        "state_before": [
+          -0.6992933413618773,
+          -15.117380050245263,
+          2.675096868796043
+        ],
+        "state_after": [
+          -3.1947816549853023,
+          -14.681757558793928,
+          -3.1024125818517474
+        ],
+        "displacement_from_start_m": 4.759730228381363,
+        "path_progress_before_m": 7.7149202210112175,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 5,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 6,
+        "reward": -0.25789821955201164,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          2.7330352173618504,
+          -31.55
+        ],
+        "state_before": [
+          -3.1947816549853023,
+          -14.681757558793928,
+          -3.1024125818517474
+        ],
+        "state_after": [
+          -2.760124982977059,
+          -14.800394093196497,
+          2.571566315062947
+        ],
+        "displacement_from_start_m": 5.207137884891731,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 5.654088579396036,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 6,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 10,
+        "reward": -0.48258247204116383,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          2.7330352173618504,
+          -31.55
+        ],
+        "state_before": [
+          -2.760124982977059,
+          -14.800394093196497,
+          2.571566315062947
+        ],
+        "state_after": [
+          -4.166158692778891,
+          -14.551819481890025,
+          3.1350014577330967
+        ],
+        "displacement_from_start_m": 3.7797593355949677,
+        "path_progress_before_m": 5.654088579396036,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 7,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 6,
+        "reward": -0.2636863976702833,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          2.7330352173618504,
+          -31.55
+        ],
+        "state_before": [
+          -4.166158692778891,
+          -14.551819481890025,
+          3.1350014577330967
+        ],
+        "state_after": [
+          -3.657930834850079,
+          -14.704366559390655,
+          2.65863854118488
+        ],
+        "displacement_from_start_m": 4.305408420571699,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 8,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 14,
+        "reward": -0.6335520261380521,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          2.7330352173618504,
+          -31.55
+        ],
+        "state_before": [
+          -3.657930834850079,
+          -14.704366559390655,
+          2.65863854118488
+        ],
+        "state_after": [
+          -1.6021215812647698,
+          -14.89221166512882,
+          3.0250154887228486
+        ],
+        "displacement_from_start_m": 6.366157873313747,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 6.812091981108325,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 9,
+        "semantic": "forward-right",
+        "primitive_id": 1,
+        "tau": 8,
+        "reward": -0.37092197819854056,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          2.7330352173618504,
+          -31.55
+        ],
+        "state_before": [
+          -1.6021215812647698,
+          -14.89221166512882,
+          3.0250154887228486
+        ],
+        "state_after": [
+          -2.7823832695719575,
+          -14.700681240351223,
+          2.979185386223069
+        ],
+        "displacement_from_start_m": 5.170782215850442,
+        "path_progress_before_m": 6.812091981108325,
+        "path_progress_after_m": 5.631830292801137,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 10,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 15,
+        "reward": -0.3921995962330438,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          2.7330352173618504,
+          -31.55
+        ],
+        "state_before": [
+          -2.7823832695719575,
+          -14.700681240351223,
+          2.979185386223069
+        ],
+        "state_after": [
+          -0.44044955237650285,
+          -15.033527466483712,
+          2.9201407558791956
+        ],
+        "displacement_from_start_m": 7.536219294343515,
+        "path_progress_before_m": 5.631830292801137,
+        "path_progress_after_m": 7.973764009996593,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 11,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 10,
+        "reward": -0.47487987952071936,
+        "escape_active_before": false,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          2.7330352173618504,
+          -31.55
+        ],
+        "state_before": [
+          -0.44044955237650285,
+          -15.033527466483712,
+          2.9201407558791956
+        ],
+        "state_after": [
+          -3.073397469912928,
+          -15.043328136201435,
+          -2.965936648080493
+        ],
+        "displacement_from_start_m": 4.94305219983691,
+        "path_progress_before_m": 7.973764009996593,
+        "path_progress_after_m": 6.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 12,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 6,
+        "reward": -0.26149527639915027,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          2.7330352173618504,
+          -31.55
+        ],
+        "state_before": [
+          -3.073397469912928,
+          -15.043328136201435,
+          -2.965936648080493
+        ],
+        "state_after": [
+          -2.6213947224310337,
+          -15.09453768763181,
+          2.7896389584935815
+        ],
+        "displacement_from_start_m": 5.395912631560661,
+        "path_progress_before_m": 6.414213562373095,
+        "path_progress_after_m": 6.414213562373095,
+        "done_reason": "running"
+      }
+    ],
+    "summary": {
+      "macro_steps_recorded": 12,
+      "terminated": false,
+      "truncated": false,
+      "done_reason": "running",
+      "final_goal_distance": 17.304686067476645,
+      "final_path_progress_m": 6.414213562373095,
+      "final_displacement_from_start_m": 5.395912631560661
+    }
+  },
+  {
+    "variant": "no_escape",
+    "seed": 10055,
+    "start": {
+      "x": -13.886812088823678,
+      "y": -14.381760131956074,
+      "heading": 3.141592653589793,
+      "min_clearance_m": 4.000000208616257,
+      "path_progress_m": 0.34998111763392925
+    },
+    "goal": {
+      "x": -4.322786626217814,
+      "y": -31.55,
+      "heading": 1.5707963267948966
+    },
+    "scene_metadata": {
+      "scene_type": "block_mixing_plant",
+      "corridor_width": 8.0,
+      "free_shape_count": 6,
+      "valid_candidate_count": 5,
+      "aligned_to": "ppo_articulated_vehicle"
+    },
+    "macro_trace": [
+      {
+        "macro_idx": 1,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 10,
+        "reward": 1.0729773404938985,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          -4.322786626217814,
+          -31.55
+        ],
+        "state_before": [
+          -13.886812088823678,
+          -14.381760131956074,
+          3.141592653589793
+        ],
+        "state_after": [
+          -12.337956043341626,
+          -14.223015921710878,
+          -3.109082341485067
+        ],
+        "displacement_from_start_m": 1.556969740846839,
+        "path_progress_before_m": 0.34998111763392925,
+        "path_progress_after_m": 2.0762575190314694,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 2,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 11,
+        "reward": 1.2310114327973634,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          -4.322786626217814,
+          -31.55
+        ],
+        "state_before": [
+          -12.337956043341626,
+          -14.223015921710878,
+          -3.109082341485067
+        ],
+        "state_after": [
+          -10.423993283784434,
+          -14.33852282473366,
+          2.9875826148996225
+        ],
+        "displacement_from_start_m": 3.463088728471921,
+        "path_progress_before_m": 2.0762575190314694,
+        "path_progress_after_m": 3.9902202785886614,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 3,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 14,
+        "reward": 1.4434068340213495,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          -4.322786626217814,
+          -31.55
+        ],
+        "state_before": [
+          -10.423993283784434,
+          -14.33852282473366,
+          2.9875826148996225
+        ],
+        "state_after": [
+          -8.079341730129956,
+          -14.980265683390758,
+          2.752895511733483
+        ],
+        "displacement_from_start_m": 5.838229257420808,
+        "path_progress_before_m": 3.9902202785886614,
+        "path_progress_after_m": 6.334871832243139,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 4,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 3,
+        "reward": -0.1563238200940898,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          -4.322786626217814,
+          -31.55
+        ],
+        "state_before": [
+          -8.079341730129956,
+          -14.980265683390758,
+          2.752895511733483
+        ],
+        "state_after": [
+          -8.425661571403413,
+          -14.878356278726914,
+          2.952053156135224
+        ],
+        "displacement_from_start_m": 5.483682403905907,
+        "path_progress_before_m": 6.334871832243139,
+        "path_progress_after_m": 5.988551990969682,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 5,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 8,
+        "reward": -0.37301220080818115,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          -4.322786626217814,
+          -31.55
+        ],
+        "state_before": [
+          -8.425661571403413,
+          -14.878356278726914,
+          2.952053156135224
+        ],
+        "state_after": [
+          -9.631702010248542,
+          -14.5983237159497,
+          2.956422278047513
+        ],
+        "displacement_from_start_m": 4.260617510021741,
+        "path_progress_before_m": 5.988551990969682,
+        "path_progress_after_m": 4.782511552124553,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 6,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 15,
+        "reward": 0.043594461117797925,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          -4.322786626217814,
+          -31.55
+        ],
+        "state_before": [
+          -9.631702010248542,
+          -14.5983237159497,
+          2.956422278047513
+        ],
+        "state_after": [
+          -7.256295334194806,
+          -15.378838035650313,
+          2.7025210438975806
+        ],
+        "displacement_from_start_m": 6.705066500747736,
+        "path_progress_before_m": 4.782511552124553,
+        "path_progress_after_m": 7.20797111874375,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 7,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 10,
+        "reward": -0.4714752350091487,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          -4.322786626217814,
+          -31.55
+        ],
+        "state_before": [
+          -7.256295334194806,
+          -15.378838035650313,
+          2.7025210438975806
+        ],
+        "state_after": [
+          -8.641236577327438,
+          -15.042455751570147,
+          3.021922662402691
+        ],
+        "displacement_from_start_m": 5.287020063191198,
+        "path_progress_before_m": 7.20797111874375,
+        "path_progress_after_m": 5.7729769850456565,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 8,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 7,
+        "reward": -0.3227974751468389,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          -4.322786626217814,
+          -31.55
+        ],
+        "state_before": [
+          -8.641236577327438,
+          -15.042455751570147,
+          3.021922662402691
+        ],
+        "state_after": [
+          -9.529754596323288,
+          -14.828505532756553,
+          2.8730228638237794
+        ],
+        "displacement_from_start_m": 4.379900848888039,
+        "path_progress_before_m": 5.7729769850456565,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 9,
+        "semantic": "reverse-right",
+        "primitive_id": 3,
+        "tau": 14,
+        "reward": -0.20625651869726402,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          -4.322786626217814,
+          -31.55
+        ],
+        "state_before": [
+          -9.529754596323288,
+          -14.828505532756553,
+          2.8730228638237794
+        ],
+        "state_after": [
+          -6.840995661028699,
+          -15.697205957862584,
+          2.7553523199268604
+        ],
+        "displacement_from_start_m": 7.167560732570075,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 7.726752450572629,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 10,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 10,
+        "reward": -0.46795308918677786,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          -4.322786626217814,
+          -31.55
+        ],
+        "state_before": [
+          -6.840995661028699,
+          -15.697205957862584,
+          2.7553523199268604
+        ],
+        "state_after": [
+          -8.366360509005634,
+          -15.335527258657537,
+          2.9936480548834883
+        ],
+        "displacement_from_start_m": 5.60223681908324,
+        "path_progress_before_m": 7.726752450572629,
+        "path_progress_after_m": 6.047853053367461,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 11,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 3,
+        "reward": -0.15652418283128244,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          -4.322786626217814,
+          -31.55
+        ],
+        "state_before": [
+          -8.366360509005634,
+          -15.335527258657537,
+          2.9936480548834883
+        ],
+        "state_after": [
+          -8.739034341439032,
+          -15.321422520054329,
+          -3.0863702862331706
+        ],
+        "displacement_from_start_m": 5.232836815731507,
+        "path_progress_before_m": 6.047853053367461,
+        "path_progress_after_m": 5.675179220934063,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 12,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 6,
+        "reward": -0.2702383928234549,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.5707963267948966,
+        "reference_goal_position": [
+          -4.322786626217814,
+          -31.55
+        ],
+        "state_before": [
+          -8.739034341439032,
+          -15.321422520054329,
+          -3.0863702862331706
+        ],
+        "state_after": [
+          -9.465698401803417,
+          -15.216040492301588,
+          2.8643100122086
+        ],
+        "displacement_from_start_m": 4.499141023930693,
+        "path_progress_before_m": 5.675179220934063,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      }
+    ],
+    "summary": {
+      "macro_steps_recorded": 12,
+      "terminated": false,
+      "truncated": false,
+      "done_reason": "running",
+      "final_goal_distance": 17.124478816319883,
+      "final_path_progress_m": 5.414213562373095,
+      "final_displacement_from_start_m": 4.499141023930693
+    }
+  },
+  {
+    "variant": "no_escape",
+    "seed": 10056,
+    "start": {
+      "x": -9.199728269411285,
+      "y": -26.357151190639428,
+      "heading": 3.141592653589793,
+      "min_clearance_m": 4.000000208616257,
+      "path_progress_m": 0.0
+    },
+    "goal": {
+      "x": 4.214092803663276,
+      "y": 25.733521731001836,
+      "heading": 0.0
+    },
+    "scene_metadata": {
+      "scene_type": "block_mixing_plant",
+      "corridor_width": 8.0,
+      "free_shape_count": 6,
+      "valid_candidate_count": 5,
+      "aligned_to": "ppo_articulated_vehicle"
+    },
+    "macro_trace": [
+      {
+        "macro_idx": 1,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 16,
+        "reward": 1.5339428691305304,
+        "escape_active_before": true,
+        "reference_goal_heading": 0.0,
+        "reference_goal_position": [
+          4.214092803663276,
+          25.733521731001836
+        ],
+        "state_before": [
+          -9.199728269411285,
+          -26.357151190639428,
+          3.141592653589793
+        ],
+        "state_after": [
+          -6.669977783166295,
+          -26.25889890653807,
+          3.100310295036861
+        ],
+        "displacement_from_start_m": 2.5316577639933677,
+        "path_progress_before_m": 0.0,
+        "path_progress_after_m": 2.7442357792068,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 2,
+        "semantic": "forward-right",
+        "primitive_id": 1,
+        "tau": 10,
+        "reward": -0.4537725277194021,
+        "escape_active_before": true,
+        "reference_goal_heading": 0.0,
+        "reference_goal_position": [
+          4.214092803663276,
+          25.733521731001836
+        ],
+        "state_before": [
+          -6.669977783166295,
+          -26.25889890653807,
+          3.100310295036861
+        ],
+        "state_after": [
+          -7.996029184972966,
+          -26.10101038954876,
+          3.0263402439713376
+        ],
+        "displacement_from_start_m": 1.2306500704347338,
+        "path_progress_before_m": 2.7442357792068,
+        "path_progress_after_m": 0.6384894399987766,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 3,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 14,
+        "reward": -0.0774438835220661,
+        "escape_active_before": true,
+        "reference_goal_heading": 0.0,
+        "reference_goal_position": [
+          4.214092803663276,
+          25.733521731001836
+        ],
+        "state_before": [
+          -7.996029184972966,
+          -26.10101038954876,
+          3.0263402439713376
+        ],
+        "state_after": [
+          -5.99453587950832,
+          -26.268166501462126,
+          2.9912107997955104
+        ],
+        "displacement_from_start_m": 3.2064273781266057,
+        "path_progress_before_m": 0.6384894399987766,
+        "path_progress_after_m": 3.4196776828647746,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 4,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 11,
+        "reward": -0.5009362592242086,
+        "escape_active_before": true,
+        "reference_goal_heading": 0.0,
+        "reference_goal_position": [
+          4.214092803663276,
+          25.733521731001836
+        ],
+        "state_before": [
+          -5.99453587950832,
+          -26.268166501462126,
+          2.9912107997955104
+        ],
+        "state_after": [
+          -7.659222658611185,
+          -26.27569554128986,
+          -3.040568004267839
+        ],
+        "displacement_from_start_m": 1.5426576288073606,
+        "path_progress_before_m": 3.4196776828647746,
+        "path_progress_after_m": 1.7549909037619102,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 5,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 11,
+        "reward": -0.48943457415240943,
+        "escape_active_before": true,
+        "reference_goal_heading": 0.0,
+        "reference_goal_position": [
+          4.214092803663276,
+          25.733521731001836
+        ],
+        "state_before": [
+          -7.659222658611185,
+          -26.27569554128986,
+          -3.040568004267839
+        ],
+        "state_after": [
+          -9.278486151019443,
+          -26.61411114883804,
+          -2.8377133837015265
+        ],
+        "displacement_from_start_m": 0.26875867247930463,
+        "path_progress_before_m": 1.7549909037619102,
+        "path_progress_after_m": 1.4142135623730951,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 6,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 16,
+        "reward": -0.7020276072776053,
+        "escape_active_before": true,
+        "reference_goal_heading": 0.0,
+        "reference_goal_position": [
+          4.214092803663276,
+          25.733521731001836
+        ],
+        "state_before": [
+          -9.278486151019443,
+          -26.61411114883804,
+          -2.8377133837015265
+        ],
+        "state_after": [
+          -6.673677642404636,
+          -26.280448305814893,
+          -3.1054704634014487
+        ],
+        "displacement_from_start_m": 2.527214890495284,
+        "path_progress_before_m": 1.4142135623730951,
+        "path_progress_after_m": 2.740535919968459,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 7,
+        "semantic": "forward-right",
+        "primitive_id": 1,
+        "tau": 10,
+        "reward": -0.4551988542664095,
+        "escape_active_before": true,
+        "reference_goal_heading": 0.0,
+        "reference_goal_position": [
+          4.214092803663276,
+          25.733521731001836
+        ],
+        "state_before": [
+          -6.673677642404636,
+          -26.280448305814893,
+          -3.1054704634014487
+        ],
+        "state_after": [
+          -7.9796130555406295,
+          -26.18360471134196,
+          3.059461651217191
+        ],
+        "displacement_from_start_m": 1.232395843710608,
+        "path_progress_before_m": 2.740535919968459,
+        "path_progress_after_m": 1.4346005068324656,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 8,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 14,
+        "reward": -0.571112711007837,
+        "escape_active_before": true,
+        "reference_goal_heading": 0.0,
+        "reference_goal_position": [
+          4.214092803663276,
+          25.733521731001836
+        ],
+        "state_before": [
+          -7.9796130555406295,
+          -26.18360471134196,
+          3.059461651217191
+        ],
+        "state_after": [
+          -5.936128531845342,
+          -26.23823578527745,
+          3.0493201340945078
+        ],
+        "displacement_from_start_m": 3.2657654723927885,
+        "path_progress_before_m": 1.4346005068324656,
+        "path_progress_after_m": 3.478085030527753,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 9,
+        "semantic": "forward-right",
+        "primitive_id": 1,
+        "tau": 11,
+        "reward": -0.49887637782093897,
+        "escape_active_before": true,
+        "reference_goal_heading": 0.0,
+        "reference_goal_position": [
+          4.214092803663276,
+          25.733521731001836
+        ],
+        "state_before": [
+          -5.936128531845342,
+          -26.23823578527745,
+          3.0493201340945078
+        ],
+        "state_after": [
+          -7.641750007819694,
+          -26.062719080181168,
+          3.070254658930926
+        ],
+        "displacement_from_start_m": 1.5855555907191834,
+        "path_progress_before_m": 3.478085030527753,
+        "path_progress_after_m": 1.7724635545534009,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 10,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 13,
+        "reward": -0.5395982133831144,
+        "escape_active_before": true,
+        "reference_goal_heading": 0.0,
+        "reference_goal_position": [
+          4.214092803663276,
+          25.733521731001836
+        ],
+        "state_before": [
+          -7.641750007819694,
+          -26.062719080181168,
+          3.070254658930926
+        ],
+        "state_after": [
+          -5.890972936170154,
+          -26.190794930308478,
+          3.0047201480673174
+        ],
+        "displacement_from_start_m": 3.312934690059996,
+        "path_progress_before_m": 1.7724635545534009,
+        "path_progress_after_m": 3.5232406262029405,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 11,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 11,
+        "reward": -0.4963478180305243,
+        "escape_active_before": true,
+        "reference_goal_heading": 0.0,
+        "reference_goal_position": [
+          4.214092803663276,
+          25.733521731001836
+        ],
+        "state_before": [
+          -5.890972936170154,
+          -26.190794930308478,
+          3.0047201480673174
+        ],
+        "state_after": [
+          -7.620628387574348,
+          -26.313511684589386,
+          -2.947461949333827
+        ],
+        "displacement_from_start_m": 1.5797027705570819,
+        "path_progress_before_m": 3.5232406262029405,
+        "path_progress_after_m": 1.7935851747987472,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 12,
+        "semantic": "forward-right",
+        "primitive_id": 1,
+        "tau": 11,
+        "reward": -0.5043480299773742,
+        "escape_active_before": true,
+        "reference_goal_heading": 0.0,
+        "reference_goal_position": [
+          4.214092803663276,
+          25.733521731001836
+        ],
+        "state_before": [
+          -7.620628387574348,
+          -26.313511684589386,
+          -2.947461949333827
+        ],
+        "state_after": [
+          -9.113394259459412,
+          -26.252079287044637,
+          3.0797435979089425
+        ],
+        "displacement_from_start_m": 0.13599141958007166,
+        "path_progress_before_m": 1.7935851747987472,
+        "path_progress_after_m": 1.4142135623730951,
+        "done_reason": "running"
+      }
+    ],
+    "summary": {
+      "macro_steps_recorded": 12,
+      "terminated": false,
+      "truncated": false,
+      "done_reason": "running",
+      "final_goal_distance": 53.66679256882432,
+      "final_path_progress_m": 1.4142135623730951,
+      "final_displacement_from_start_m": 0.13599141958007166
+    }
+  },
+  {
+    "variant": "escape12",
+    "seed": 10045,
+    "start": {
+      "x": 11.891670989431379,
+      "y": -13.691404078381865,
+      "heading": 0.0,
+      "min_clearance_m": 4.000000208616257,
+      "path_progress_m": 0.29481044679499674
+    },
+    "goal": {
+      "x": -8.735422960541975,
+      "y": 20.513997452653655,
+      "heading": 3.141592653589793
+    },
+    "scene_metadata": {
+      "scene_type": "block_mixing_plant",
+      "corridor_width": 8.0,
+      "free_shape_count": 7,
+      "valid_candidate_count": 6,
+      "aligned_to": "ppo_articulated_vehicle"
+    },
+    "macro_trace": [
+      {
+        "macro_idx": 1,
+        "semantic": "reverse-right",
+        "primitive_id": 3,
+        "tau": 15,
+        "reward": 2.132545002246083,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.4712001620873463,
+        "reference_goal_position": [
+          4.0,
+          -7.6568542494923815
+        ],
+        "state_before": [
+          11.891670989431379,
+          -13.691404078381865,
+          0.0
+        ],
+        "state_after": [
+          8.834386799767657,
+          -13.738992658386024,
+          -0.05850660623665238
+        ],
+        "displacement_from_start_m": 3.057654540544856,
+        "path_progress_before_m": 0.29481044679499674,
+        "path_progress_after_m": 3.579826762605438,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 2,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 3,
+        "reward": 0.06575599812236153,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.2189907821421424,
+        "reference_goal_position": [
+          2.7573593128807152,
+          -4.757359312880715
+        ],
+        "state_before": [
+          8.834386799767657,
+          -13.738992658386024,
+          -0.05850660623665238
+        ],
+        "state_after": [
+          8.628362118116092,
+          -13.750905822137277,
+          0.19113532745350437
+        ],
+        "displacement_from_start_m": 3.263851290594439,
+        "path_progress_before_m": 3.579826762605438,
+        "path_progress_after_m": 3.785851444257003,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 3,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.006793285775188175,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.2189907821421424,
+        "reference_goal_position": [
+          2.7573593128807152,
+          -4.757359312880715
+        ],
+        "state_before": [
+          8.628362118116092,
+          -13.750905822137277,
+          0.19113532745350437
+        ],
+        "state_after": [
+          8.584746895734902,
+          -13.759190666913051,
+          0.18258860300679025
+        ],
+        "displacement_from_start_m": 3.3076187783744007,
+        "path_progress_before_m": 3.785851444257003,
+        "path_progress_after_m": 3.8294666666381927,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 4,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.008636510562674202,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.2189907821421424,
+        "reference_goal_position": [
+          2.7573593128807152,
+          -4.757359312880715
+        ],
+        "state_before": [
+          8.584746895734902,
+          -13.759190666913051,
+          0.18258860300679025
+        ],
+        "state_after": [
+          8.542992974380343,
+          -13.766759318114934,
+          0.17441935649208817
+        ],
+        "displacement_from_start_m": 3.349525766528953,
+        "path_progress_before_m": 3.8294666666381927,
+        "path_progress_after_m": 3.8712205879927515,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 5,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.008541013322448183,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.2189907821421424,
+        "reference_goal_position": [
+          2.7573593128807152,
+          -4.757359312880715
+        ],
+        "state_before": [
+          8.542992974380343,
+          -13.766759318114934,
+          0.17441935649208817
+        ],
+        "state_after": [
+          8.501143223195351,
+          -13.773992620859778,
+          0.1662431990220714
+        ],
+        "displacement_from_start_m": 3.391533488109191,
+        "path_progress_before_m": 3.8712205879927515,
+        "path_progress_after_m": 3.913070339177744,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 6,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.009534863131631852,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.2189907821421424,
+        "reference_goal_position": [
+          2.7573593128807152,
+          -4.757359312880715
+        ],
+        "state_before": [
+          8.501143223195351,
+          -13.773992620859778,
+          0.1662431990220714
+        ],
+        "state_after": [
+          8.460297231750738,
+          -13.780712445137812,
+          0.15827403306410304
+        ],
+        "displacement_from_start_m": 3.4325357753812233,
+        "path_progress_before_m": 3.913070339177744,
+        "path_progress_after_m": 3.9539163306223566,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 7,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.009228364440898341,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.157502049283399,
+        "reference_goal_position": [
+          2.0502525316941673,
+          -4.050252531694167
+        ],
+        "state_before": [
+          8.460297231750738,
+          -13.780712445137812,
+          0.15827403306410304
+        ],
+        "state_after": [
+          8.419142347023579,
+          -13.787145831561938,
+          0.15025488481796634
+        ],
+        "displacement_from_start_m": 3.47384824879334,
+        "path_progress_before_m": 3.9539163306223566,
+        "path_progress_after_m": 3.9950712153495163,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 8,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.008935945731584448,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.157502049283399,
+        "reference_goal_position": [
+          2.0502525316941673,
+          -4.050252531694167
+        ],
+        "state_before": [
+          8.419142347023579,
+          -13.787145831561938,
+          0.15025488481796634
+        ],
+        "state_after": [
+          8.37769276551227,
+          -13.793284386050654,
+          0.14218818919516707
+        ],
+        "displacement_from_start_m": 3.515454814852323,
+        "path_progress_before_m": 3.9950712153495163,
+        "path_progress_after_m": 4.036520796860825,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 9,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.008993789888354094,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.157502049283399,
+        "reference_goal_position": [
+          2.0502525316941673,
+          -4.050252531694167
+        ],
+        "state_before": [
+          8.37769276551227,
+          -13.793284386050654,
+          0.14218818919516707
+        ],
+        "state_after": [
+          8.33630202246755,
+          -13.799073767914418,
+          0.13414228531490213
+        ],
+        "displacement_from_start_m": 3.5569989110616107,
+        "path_progress_before_m": 4.036520796860825,
+        "path_progress_after_m": 4.0779115399055454,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 10,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.009012991139276673,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.157502049283399,
+        "reference_goal_position": [
+          2.0502525316941673,
+          -4.050252531694167
+        ],
+        "state_before": [
+          8.33630202246755,
+          -13.799073767914418,
+          0.13414228531490213
+        ],
+        "state_after": [
+          8.294931084001888,
+          -13.804521587626068,
+          0.12610900641183198
+        ],
+        "displacement_from_start_m": 3.5985182392488375,
+        "path_progress_before_m": 4.0779115399055454,
+        "path_progress_after_m": 4.119282478371207,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 11,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.008779337746899802,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.157502049283399,
+        "reference_goal_position": [
+          2.0502525316941673,
+          -4.050252531694167
+        ],
+        "state_before": [
+          8.294931084001888,
+          -13.804521587626068,
+          0.12610900641183198
+        ],
+        "state_after": [
+          8.253324698825551,
+          -13.809660099724939,
+          0.11803830096256407
+        ],
+        "displacement_from_start_m": 3.6402676023816,
+        "path_progress_before_m": 4.119282478371207,
+        "path_progress_after_m": 4.160888863547544,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 12,
+        "semantic": "reverse-align",
+        "primitive_id": 4,
+        "tau": 1,
+        "reward": -0.008769958678206898,
+        "escape_active_before": true,
+        "reference_goal_heading": 2.157502049283399,
+        "reference_goal_position": [
+          2.0502525316941673,
+          -4.050252531694167
+        ],
+        "state_before": [
+          8.253324698825551,
+          -13.809660099724939,
+          0.11803830096256407
+        ],
+        "state_after": [
+          8.21170922128494,
+          -13.814459179061448,
+          0.10997360538842926
+        ],
+        "displacement_from_start_m": 3.6820186274410305,
+        "path_progress_before_m": 4.160888863547544,
+        "path_progress_after_m": 4.202504341088155,
+        "done_reason": "running"
+      }
+    ],
+    "summary": {
+      "macro_steps_recorded": 12,
+      "terminated": false,
+      "truncated": false,
+      "done_reason": "running",
+      "final_goal_distance": 38.28378539151866,
+      "final_path_progress_m": 4.202504341088155,
+      "final_displacement_from_start_m": 3.6820186274410305
+    }
+  },
+  {
+    "variant": "escape12",
+    "seed": 10054,
+    "start": {
+      "x": -7.906132819433627,
+      "y": -14.004851322880327,
+      "heading": 3.141592653589793,
+      "min_clearance_m": 4.000000208616257,
+      "path_progress_m": 0.06980452321574927
+    },
+    "goal": {
+      "x": 2.7330352173618504,
+      "y": -31.55,
+      "heading": 1.5707963267948966
+    },
+    "scene_metadata": {
+      "scene_type": "block_mixing_plant",
+      "corridor_width": 8.0,
+      "free_shape_count": 8,
+      "valid_candidate_count": 7,
+      "aligned_to": "ppo_articulated_vehicle"
+    },
+    "macro_trace": [
+      {
+        "macro_idx": 1,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 12,
+        "reward": 1.6563445793657632,
+        "escape_active_before": true,
+        "reference_goal_heading": -0.37144451636927045,
+        "reference_goal_position": [
+          1.8284271247461885,
+          -17.828427124746188
+        ],
+        "state_before": [
+          -7.906132819433627,
+          -14.004851322880327,
+          3.141592653589793
+        ],
+        "state_after": [
+          -5.811679745824207,
+          -13.859915919361713,
+          3.1253121302159474
+        ],
+        "displacement_from_start_m": 2.0994618235979075,
+        "path_progress_before_m": 0.06980452321574927,
+        "path_progress_after_m": 2.6025338165488883,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 2,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 14,
+        "reward": 1.6886495844399003,
+        "escape_active_before": true,
+        "reference_goal_heading": -0.5738731733740139,
+        "reference_goal_position": [
+          2.0,
+          -20.17157287525381
+        ],
+        "state_before": [
+          -5.811679745824207,
+          -13.859915919361713,
+          3.1253121302159474
+        ],
+        "state_after": [
+          -3.1615143271194253,
+          -14.207351803607901,
+          2.8967162348361235
+        ],
+        "displacement_from_start_m": 4.748937889918627,
+        "path_progress_before_m": 2.6025338165488883,
+        "path_progress_after_m": 5.25269923525367,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 3,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 16,
+        "reward": 1.4091385238227538,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.0216892554740278,
+        "reference_goal_position": [
+          2.0,
+          -23.17157287525381
+        ],
+        "state_before": [
+          -3.1615143271194253,
+          -14.207351803607901,
+          2.8967162348361235
+        ],
+        "state_after": [
+          -0.6992933413618773,
+          -15.117380050245263,
+          2.675096868796043
+        ],
+        "displacement_from_start_m": 7.292205114497653,
+        "path_progress_before_m": 5.25269923525367,
+        "path_progress_after_m": 7.7149202210112175,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 4,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 11,
+        "reward": -0.47596194791468716,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.283988509687748,
+        "reference_goal_position": [
+          2.0,
+          -25.17157287525381
+        ],
+        "state_before": [
+          -0.6992933413618773,
+          -15.117380050245263,
+          2.675096868796043
+        ],
+        "state_after": [
+          -3.1947816549853023,
+          -14.681757558793928,
+          -3.1024125818517474
+        ],
+        "displacement_from_start_m": 4.759730228381363,
+        "path_progress_before_m": 7.7149202210112175,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 5,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 1,
+        "reward": -0.04765435948598895,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.283988509687748,
+        "reference_goal_position": [
+          2.0,
+          -25.17157287525381
+        ],
+        "state_before": [
+          -3.1947816549853023,
+          -14.681757558793928,
+          -3.1024125818517474
+        ],
+        "state_after": [
+          -3.1556381481917786,
+          -14.679453609908702,
+          -3.0532856018065497
+        ],
+        "displacement_from_start_m": 4.798154631434997,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 6,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 1,
+        "reward": -0.0503531732918582,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.283988509687748,
+        "reference_goal_position": [
+          2.0,
+          -25.17157287525381
+        ],
+        "state_before": [
+          -3.1556381481917786,
+          -14.679453609908702,
+          -3.0532856018065497
+        ],
+        "state_after": [
+          -3.1159439351433753,
+          -14.676057525665497,
+          -3.060682445934188
+        ],
+        "displacement_from_start_m": 4.83698535389918,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 7,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 1,
+        "reward": -0.05034918969140134,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.283988509687748,
+        "reference_goal_position": [
+          2.0,
+          -25.17157287525381
+        ],
+        "state_before": [
+          -3.1159439351433753,
+          -14.676057525665497,
+          -3.060682445934188
+        ],
+        "state_after": [
+          -3.0766737883561555,
+          -14.672988826007984,
+          -3.0679958577289597
+        ],
+        "displacement_from_start_m": 4.875457133022647,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 8,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 1,
+        "reward": -0.05034977088513848,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.283988509687748,
+        "reference_goal_position": [
+          2.0,
+          -25.17157287525381
+        ],
+        "state_before": [
+          -3.0766737883561555,
+          -14.672988826007984,
+          -3.0679958577289597
+        ],
+        "state_after": [
+          -3.037316838907821,
+          -14.670202966842542,
+          -3.075321442016898
+        ],
+        "displacement_from_start_m": 4.914067751094473,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 9,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 1,
+        "reward": -0.050350361707086365,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.283988509687748,
+        "reference_goal_position": [
+          2.0,
+          -25.17157287525381
+        ],
+        "state_before": [
+          -3.037316838907821,
+          -14.670202966842542,
+          -3.075321442016898
+        ],
+        "state_after": [
+          -2.997874012318449,
+          -14.667701469090774,
+          -3.0826594004507752
+        ],
+        "displacement_from_start_m": 4.952814839457955,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 5.416339550054646,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 10,
+        "semantic": "straight-adjust",
+        "primitive_id": 6,
+        "tau": 1,
+        "reward": -0.0503508751634152,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.283988509687748,
+        "reference_goal_position": [
+          2.0,
+          -25.17157287525381
+        ],
+        "state_before": [
+          -2.997874012318449,
+          -14.667701469090774,
+          -3.0826594004507752
+        ],
+        "state_after": [
+          -2.9583560536887004,
+          -14.66548639421348,
+          -3.0900081126888574
+        ],
+        "displacement_from_start_m": 4.9916864506017085,
+        "path_progress_before_m": 5.416339550054646,
+        "path_progress_after_m": 5.455857508684394,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 11,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 6,
+        "reward": -0.297781061270463,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.283988509687748,
+        "reference_goal_position": [
+          2.0,
+          -25.17157287525381
+        ],
+        "state_before": [
+          -2.9583560536887004,
+          -14.66548639421348,
+          -3.0900081126888574
+        ],
+        "state_after": [
+          -3.6912240937358702,
+          -14.575472926948763,
+          2.9227611458119815
+        ],
+        "displacement_from_start_m": 4.253359211375489,
+        "path_progress_before_m": 5.455857508684394,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 12,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 16,
+        "reward": -0.6929494385283015,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.283988509687748,
+        "reference_goal_position": [
+          2.0,
+          -25.17157287525381
+        ],
+        "state_before": [
+          -3.6912240937358702,
+          -14.575472926948763,
+          2.9227611458119815
+        ],
+        "state_after": [
+          -0.9540725515064393,
+          -15.11950560581189,
+          2.8421055145059855
+        ],
+        "displacement_from_start_m": 7.0408519469840805,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 7.460141010866655,
+        "done_reason": "running"
+      }
+    ],
+    "summary": {
+      "macro_steps_recorded": 12,
+      "terminated": false,
+      "truncated": false,
+      "done_reason": "running",
+      "final_goal_distance": 16.839118437041048,
+      "final_path_progress_m": 7.460141010866655,
+      "final_displacement_from_start_m": 7.0408519469840805
+    }
+  },
+  {
+    "variant": "escape12",
+    "seed": 10055,
+    "start": {
+      "x": -13.886812088823678,
+      "y": -14.381760131956074,
+      "heading": 3.141592653589793,
+      "min_clearance_m": 4.000000208616257,
+      "path_progress_m": 0.34998111763392925
+    },
+    "goal": {
+      "x": -4.322786626217814,
+      "y": -31.55,
+      "heading": 1.5707963267948966
+    },
+    "scene_metadata": {
+      "scene_type": "block_mixing_plant",
+      "corridor_width": 8.0,
+      "free_shape_count": 6,
+      "valid_candidate_count": 5,
+      "aligned_to": "ppo_articulated_vehicle"
+    },
+    "macro_trace": [
+      {
+        "macro_idx": 1,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 10,
+        "reward": 1.0772899156803846,
+        "escape_active_before": true,
+        "reference_goal_heading": -0.5357615973895188,
+        "reference_goal_position": [
+          -5.0,
+          -19.343145750507617
+        ],
+        "state_before": [
+          -13.886812088823678,
+          -14.381760131956074,
+          3.141592653589793
+        ],
+        "state_after": [
+          -12.337956043341626,
+          -14.223015921710878,
+          -3.109082341485067
+        ],
+        "displacement_from_start_m": 1.556969740846839,
+        "path_progress_before_m": 0.34998111763392925,
+        "path_progress_after_m": 2.0762575190314694,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 2,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 11,
+        "reward": 1.2149706822314945,
+        "escape_active_before": true,
+        "reference_goal_heading": -0.767762836228665,
+        "reference_goal_position": [
+          -5.0,
+          -21.757359312880716
+        ],
+        "state_before": [
+          -12.337956043341626,
+          -14.223015921710878,
+          -3.109082341485067
+        ],
+        "state_after": [
+          -10.423993283784434,
+          -14.33852282473366,
+          2.9875826148996225
+        ],
+        "displacement_from_start_m": 3.463088728471921,
+        "path_progress_before_m": 2.0762575190314694,
+        "path_progress_after_m": 3.9902202785886614,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 3,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 14,
+        "reward": 1.4239017685941335,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.0520122875990983,
+        "reference_goal_position": [
+          -5.0,
+          -23.757359312880713
+        ],
+        "state_before": [
+          -10.423993283784434,
+          -14.33852282473366,
+          2.9875826148996225
+        ],
+        "state_after": [
+          -8.079341730129956,
+          -14.980265683390758,
+          2.752895511733483
+        ],
+        "displacement_from_start_m": 5.838229257420808,
+        "path_progress_before_m": 3.9902202785886614,
+        "path_progress_after_m": 6.334871832243139,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 4,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 3,
+        "reward": -0.1377161799059102,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.2988275676241618,
+        "reference_goal_position": [
+          -5.0,
+          -25.757359312880713
+        ],
+        "state_before": [
+          -8.079341730129956,
+          -14.980265683390758,
+          2.752895511733483
+        ],
+        "state_after": [
+          -8.425661571403413,
+          -14.878356278726914,
+          2.952053156135224
+        ],
+        "displacement_from_start_m": 5.483682403905907,
+        "path_progress_before_m": 6.334871832243139,
+        "path_progress_after_m": 5.988551990969682,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 5,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 8,
+        "reward": -0.37317268628289085,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.2988275676241618,
+        "reference_goal_position": [
+          -5.0,
+          -25.757359312880713
+        ],
+        "state_before": [
+          -8.425661571403413,
+          -14.878356278726914,
+          2.952053156135224
+        ],
+        "state_after": [
+          -9.631702010248542,
+          -14.5983237159497,
+          2.956422278047513
+        ],
+        "displacement_from_start_m": 4.260617510021741,
+        "path_progress_before_m": 5.988551990969682,
+        "path_progress_after_m": 4.782511552124553,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 6,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 15,
+        "reward": 0.022471229614834123,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.2988275676241618,
+        "reference_goal_position": [
+          -5.0,
+          -25.757359312880713
+        ],
+        "state_before": [
+          -9.631702010248542,
+          -14.5983237159497,
+          2.956422278047513
+        ],
+        "state_after": [
+          -7.256295334194806,
+          -15.378838035650313,
+          2.7025210438975806
+        ],
+        "displacement_from_start_m": 6.705066500747736,
+        "path_progress_before_m": 4.782511552124553,
+        "path_progress_after_m": 7.20797111874375,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 7,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 10,
+        "reward": -0.4431607305531169,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.393647155249496,
+        "reference_goal_position": [
+          -5.0,
+          -27.17157287525381
+        ],
+        "state_before": [
+          -7.256295334194806,
+          -15.378838035650313,
+          2.7025210438975806
+        ],
+        "state_after": [
+          -8.641236577327438,
+          -15.042455751570147,
+          3.021922662402691
+        ],
+        "displacement_from_start_m": 5.287020063191198,
+        "path_progress_before_m": 7.20797111874375,
+        "path_progress_after_m": 5.7729769850456565,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 8,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 7,
+        "reward": -0.33657485861956116,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.393647155249496,
+        "reference_goal_position": [
+          -5.0,
+          -27.17157287525381
+        ],
+        "state_before": [
+          -8.641236577327438,
+          -15.042455751570147,
+          3.021922662402691
+        ],
+        "state_after": [
+          -9.529754596323288,
+          -14.828505532756553,
+          2.8730228638237794
+        ],
+        "displacement_from_start_m": 4.379900848888039,
+        "path_progress_before_m": 5.7729769850456565,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 9,
+        "semantic": "reverse-right",
+        "primitive_id": 3,
+        "tau": 14,
+        "reward": -0.2156524793042374,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.393647155249496,
+        "reference_goal_position": [
+          -5.0,
+          -27.17157287525381
+        ],
+        "state_before": [
+          -9.529754596323288,
+          -14.828505532756553,
+          2.8730228638237794
+        ],
+        "state_after": [
+          -6.840995661028699,
+          -15.697205957862584,
+          2.7553523199268604
+        ],
+        "displacement_from_start_m": 7.167560732570075,
+        "path_progress_before_m": 5.414213562373095,
+        "path_progress_after_m": 7.726752450572629,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 10,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 10,
+        "reward": -0.4466828763754876,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.393647155249496,
+        "reference_goal_position": [
+          -5.0,
+          -27.17157287525381
+        ],
+        "state_before": [
+          -6.840995661028699,
+          -15.697205957862584,
+          2.7553523199268604
+        ],
+        "state_after": [
+          -8.366360509005634,
+          -15.335527258657537,
+          2.9936480548834883
+        ],
+        "displacement_from_start_m": 5.60223681908324,
+        "path_progress_before_m": 7.726752450572629,
+        "path_progress_after_m": 6.047853053367461,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 11,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 3,
+        "reward": -0.13751581716871758,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.393647155249496,
+        "reference_goal_position": [
+          -5.0,
+          -27.17157287525381
+        ],
+        "state_before": [
+          -8.366360509005634,
+          -15.335527258657537,
+          2.9936480548834883
+        ],
+        "state_after": [
+          -8.739034341439032,
+          -15.321422520054329,
+          -3.0863702862331706
+        ],
+        "displacement_from_start_m": 5.232836815731507,
+        "path_progress_before_m": 6.047853053367461,
+        "path_progress_after_m": 5.675179220934063,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 12,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 6,
+        "reward": -0.3005497028565451,
+        "escape_active_before": true,
+        "reference_goal_heading": -1.393647155249496,
+        "reference_goal_position": [
+          -5.0,
+          -27.17157287525381
+        ],
+        "state_before": [
+          -8.739034341439032,
+          -15.321422520054329,
+          -3.0863702862331706
+        ],
+        "state_after": [
+          -9.465698401803417,
+          -15.216040492301588,
+          2.8643100122086
+        ],
+        "displacement_from_start_m": 4.499141023930693,
+        "path_progress_before_m": 5.675179220934063,
+        "path_progress_after_m": 5.414213562373095,
+        "done_reason": "running"
+      }
+    ],
+    "summary": {
+      "macro_steps_recorded": 12,
+      "terminated": false,
+      "truncated": false,
+      "done_reason": "running",
+      "final_goal_distance": 17.124478816319883,
+      "final_path_progress_m": 5.414213562373095,
+      "final_displacement_from_start_m": 4.499141023930693
+    }
+  },
+  {
+    "variant": "escape12",
+    "seed": 10056,
+    "start": {
+      "x": -9.199728269411285,
+      "y": -26.357151190639428,
+      "heading": 3.141592653589793,
+      "min_clearance_m": 4.000000208616257,
+      "path_progress_m": 0.0
+    },
+    "goal": {
+      "x": 4.214092803663276,
+      "y": 25.733521731001836,
+      "heading": 0.0
+    },
+    "scene_metadata": {
+      "scene_type": "block_mixing_plant",
+      "corridor_width": 8.0,
+      "free_shape_count": 6,
+      "valid_candidate_count": 5,
+      "aligned_to": "ppo_articulated_vehicle"
+    },
+    "macro_trace": [
+      {
+        "macro_idx": 1,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 16,
+        "reward": 1.5327051323278116,
+        "escape_active_before": true,
+        "reference_goal_heading": 0.9124496756955391,
+        "reference_goal_position": [
+          -3.0,
+          -18.242640687119284
+        ],
+        "state_before": [
+          -9.199728269411285,
+          -26.357151190639428,
+          3.141592653589793
+        ],
+        "state_after": [
+          -6.669977783166295,
+          -26.25889890653807,
+          3.100310295036861
+        ],
+        "displacement_from_start_m": 2.5316577639933677,
+        "path_progress_before_m": 0.0,
+        "path_progress_after_m": 2.7442357792068,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 2,
+        "semantic": "forward-right",
+        "primitive_id": 1,
+        "tau": 10,
+        "reward": -0.453772527719402,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.1595361890526283,
+        "reference_goal_position": [
+          -3.0,
+          -15.828427124746188
+        ],
+        "state_before": [
+          -6.669977783166295,
+          -26.25889890653807,
+          3.100310295036861
+        ],
+        "state_after": [
+          -7.996029184972966,
+          -26.10101038954876,
+          3.0263402439713376
+        ],
+        "displacement_from_start_m": 1.2306500704347338,
+        "path_progress_before_m": 2.7442357792068,
+        "path_progress_after_m": 0.6384894399987766,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 3,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 14,
+        "reward": -0.0774438835220661,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.1595361890526283,
+        "reference_goal_position": [
+          -3.0,
+          -15.828427124746188
+        ],
+        "state_before": [
+          -7.996029184972966,
+          -26.10101038954876,
+          3.0263402439713376
+        ],
+        "state_after": [
+          -5.99453587950832,
+          -26.268166501462126,
+          2.9912107997955104
+        ],
+        "displacement_from_start_m": 3.2064273781266057,
+        "path_progress_before_m": 0.6384894399987766,
+        "path_progress_after_m": 3.4196776828647746,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 4,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 11,
+        "reward": -0.5092457055211693,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.283988509687748,
+        "reference_goal_position": [
+          -3.0,
+          -14.828427124746188
+        ],
+        "state_before": [
+          -5.99453587950832,
+          -26.268166501462126,
+          2.9912107997955104
+        ],
+        "state_after": [
+          -7.659222658611185,
+          -26.27569554128986,
+          -3.040568004267839
+        ],
+        "displacement_from_start_m": 1.5426576288073606,
+        "path_progress_before_m": 3.4196776828647746,
+        "path_progress_after_m": 1.7549909037619102,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 5,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 11,
+        "reward": -0.5069086720986108,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.283988509687748,
+        "reference_goal_position": [
+          -3.0,
+          -14.828427124746188
+        ],
+        "state_before": [
+          -7.659222658611185,
+          -26.27569554128986,
+          -3.040568004267839
+        ],
+        "state_after": [
+          -9.278486151019443,
+          -26.61411114883804,
+          -2.8377133837015265
+        ],
+        "displacement_from_start_m": 0.26875867247930463,
+        "path_progress_before_m": 1.7549909037619102,
+        "path_progress_after_m": 1.4142135623730951,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 6,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 16,
+        "reward": -0.6789837897599156,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.283988509687748,
+        "reference_goal_position": [
+          -3.0,
+          -14.828427124746188
+        ],
+        "state_before": [
+          -9.278486151019443,
+          -26.61411114883804,
+          -2.8377133837015265
+        ],
+        "state_after": [
+          -6.673677642404636,
+          -26.280448305814893,
+          -3.1054704634014487
+        ],
+        "displacement_from_start_m": 2.527214890495284,
+        "path_progress_before_m": 1.4142135623730951,
+        "path_progress_after_m": 2.740535919968459,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 7,
+        "semantic": "forward-right",
+        "primitive_id": 1,
+        "tau": 10,
+        "reward": -0.45176653544111706,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.283988509687748,
+        "reference_goal_position": [
+          -3.0,
+          -14.828427124746188
+        ],
+        "state_before": [
+          -6.673677642404636,
+          -26.280448305814893,
+          -3.1054704634014487
+        ],
+        "state_after": [
+          -7.9796130555406295,
+          -26.18360471134196,
+          3.059461651217191
+        ],
+        "displacement_from_start_m": 1.232395843710608,
+        "path_progress_before_m": 2.740535919968459,
+        "path_progress_after_m": 1.4346005068324656,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 8,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 14,
+        "reward": -0.5712783639409037,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.283988509687748,
+        "reference_goal_position": [
+          -3.0,
+          -14.828427124746188
+        ],
+        "state_before": [
+          -7.9796130555406295,
+          -26.18360471134196,
+          3.059461651217191
+        ],
+        "state_after": [
+          -5.936128531845342,
+          -26.23823578527745,
+          3.0493201340945078
+        ],
+        "displacement_from_start_m": 3.2657654723927885,
+        "path_progress_before_m": 1.4346005068324656,
+        "path_progress_after_m": 3.478085030527753,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 9,
+        "semantic": "forward-right",
+        "primitive_id": 1,
+        "tau": 11,
+        "reward": -0.49887637782093897,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.283988509687748,
+        "reference_goal_position": [
+          -3.0,
+          -14.828427124746188
+        ],
+        "state_before": [
+          -5.936128531845342,
+          -26.23823578527745,
+          3.0493201340945078
+        ],
+        "state_after": [
+          -7.641750007819694,
+          -26.062719080181168,
+          3.070254658930926
+        ],
+        "displacement_from_start_m": 1.5855555907191834,
+        "path_progress_before_m": 3.478085030527753,
+        "path_progress_after_m": 1.7724635545534009,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 10,
+        "semantic": "reverse-left",
+        "primitive_id": 2,
+        "tau": 13,
+        "reward": -0.5395982133831144,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.283988509687748,
+        "reference_goal_position": [
+          -3.0,
+          -14.828427124746188
+        ],
+        "state_before": [
+          -7.641750007819694,
+          -26.062719080181168,
+          3.070254658930926
+        ],
+        "state_after": [
+          -5.890972936170154,
+          -26.190794930308478,
+          3.0047201480673174
+        ],
+        "displacement_from_start_m": 3.312934690059996,
+        "path_progress_before_m": 1.7724635545534009,
+        "path_progress_after_m": 3.5232406262029405,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 11,
+        "semantic": "forward-left",
+        "primitive_id": 0,
+        "tau": 11,
+        "reward": -0.5127941221107096,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.283988509687748,
+        "reference_goal_position": [
+          -3.0,
+          -14.828427124746188
+        ],
+        "state_before": [
+          -5.890972936170154,
+          -26.190794930308478,
+          3.0047201480673174
+        ],
+        "state_after": [
+          -7.620628387574348,
+          -26.313511684589386,
+          -2.947461949333827
+        ],
+        "displacement_from_start_m": 1.5797027705570819,
+        "path_progress_before_m": 3.5232406262029405,
+        "path_progress_after_m": 1.7935851747987472,
+        "done_reason": "running"
+      },
+      {
+        "macro_idx": 12,
+        "semantic": "forward-right",
+        "primitive_id": 1,
+        "tau": 11,
+        "reward": -0.48619963377346237,
+        "escape_active_before": true,
+        "reference_goal_heading": 1.283988509687748,
+        "reference_goal_position": [
+          -3.0,
+          -14.828427124746188
+        ],
+        "state_before": [
+          -7.620628387574348,
+          -26.313511684589386,
+          -2.947461949333827
+        ],
+        "state_after": [
+          -9.113394259459412,
+          -26.252079287044637,
+          3.0797435979089425
+        ],
+        "displacement_from_start_m": 0.13599141958007166,
+        "path_progress_before_m": 1.7935851747987472,
+        "path_progress_after_m": 1.4142135623730951,
+        "done_reason": "running"
+      }
+    ],
+    "summary": {
+      "macro_steps_recorded": 12,
+      "terminated": false,
+      "truncated": false,
+      "done_reason": "running",
+      "final_goal_distance": 53.66679256882432,
+      "final_path_progress_m": 1.4142135623730951,
+      "final_displacement_from_start_m": 0.13599141958007166
+    }
+  }
+]

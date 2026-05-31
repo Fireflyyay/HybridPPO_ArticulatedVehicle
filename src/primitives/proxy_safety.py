@@ -330,6 +330,10 @@ def build_proxy_safety_sidecar(
         "max_proxies_per_action": None if max_proxies_per_action is None else int(max_proxies_per_action),
         "lidar_num": int(lidar_num),
         "lidar_range": float(lidar_range),
+        "max_macro_steps": int(executor_config.max_macro_steps),
+        "articulation_guard_margin_rad": float(executor_config.articulation_guard_margin_rad),
+        "articulation_limit_rad": float(vehicle_config.articulation_limit_rad),
+        "executor_semantics_version": 2,
         "index_kind": "full_body_swept_volume_required_clearance",
     }
     return ProxySafetySidecar(
@@ -371,6 +375,7 @@ def _simulate_proxy_rollout(executor, primitive_id: int, parameters: np.ndarray,
     for _ in range(max_steps):
         raw_control = executor._semantic_control(spec, current_state, parameter_map, context)
         control = executor._blend_control(previous_control, raw_control, smoothness)
+        control = executor._limit_aware_control(state=current_state, control=control, context=context)
         next_state = executor.kinematics.step(current_state, control)
         travelled_distance += float(np.hypot(next_state.x - current_state.x, next_state.y - current_state.y))
         elapsed_time += float(executor.vehicle_config.step_seconds)

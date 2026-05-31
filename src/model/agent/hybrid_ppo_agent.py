@@ -284,8 +284,29 @@ class HybridPPOAgent:
         )
         advantages = torch.as_tensor(targets.advantages, dtype=torch.float32, device=self.device)
         returns = torch.as_tensor(targets.returns, dtype=torch.float32, device=self.device)
+
+        raw_adv_mean = float(advantages.mean().item())
+        raw_adv_std = float(advantages.std(unbiased=False).item()) if advantages.numel() > 1 else 0.0
+        raw_adv_min = float(advantages.min().item())
+        raw_adv_max = float(advantages.max().item())
+
         if advantages.numel() > 1:
             advantages = (advantages - advantages.mean()) / (advantages.std(unbiased=False) + 1e-8)
+
+        norm_adv_std = float(advantages.std(unbiased=False).item()) if advantages.numel() > 1 else 0.0
+        return_std = float(returns.std(unbiased=False).item()) if returns.numel() > 1 else 0.0
+
+        with torch.no_grad():
+            all_values = self.value_net(observations).squeeze(-1)
+            value_pred_std = float(all_values.std(unbiased=False).item()) if all_values.numel() > 1 else 0.0
+            value_residuals = returns - all_values
+            residual_var = value_residuals.var(unbiased=False).item() if value_residuals.numel() > 1 else 0.0
+            return_var = returns.var(unbiased=False).item() if returns.numel() > 1 else 1e-8
+            explained_variance = 1.0 - residual_var / max(return_var, 1e-8)
+
+        td_errors = torch.as_tensor(targets.deltas, dtype=torch.float32, device=self.device)
+        td_error_mean = float(td_errors.mean().item())
+        td_error_std = float(td_errors.std(unbiased=False).item()) if td_errors.numel() > 1 else 0.0
 
         num_samples = observations.shape[0]
         indices = np.arange(num_samples)
@@ -418,6 +439,16 @@ class HybridPPOAgent:
             "teacher_weight_mean": last_teacher_weight,
             "advantage_mean": float(advantages.mean().item()),
             "return_mean": float(returns.mean().item()),
+            "raw_adv_mean": raw_adv_mean,
+            "raw_adv_std": raw_adv_std,
+            "raw_adv_min": raw_adv_min,
+            "raw_adv_max": raw_adv_max,
+            "norm_adv_std": norm_adv_std,
+            "return_std": return_std,
+            "value_pred_std": value_pred_std,
+            "explained_variance": float(explained_variance),
+            "td_error_mean": td_error_mean,
+            "td_error_std": td_error_std,
         }
 
     def evaluate_actions(
@@ -467,7 +498,23 @@ class HybridPPOAgent:
         alpha_raw, beta_raw = torch.chunk(raw, 2, dim=-1)
         alpha = F.softplus(alpha_raw) + 1.0
         beta = F.softplus(beta_raw) + 1.0
+        alpha, beta = self._apply_beta_std_floor(alpha, beta)
         return AffineBeta(alpha=alpha, beta=beta, low=self._low, high=self._high)
+
+    def _apply_beta_std_floor(self, alpha: torch.Tensor, beta: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        std_floor = float(self.config.std_floor)
+        if std_floor <= 0.0:
+            return alpha, beta
+
+        normalized_floor = float(np.clip(std_floor, 1e-6, 0.49))
+        concentration = torch.clamp(alpha + beta, min=1e-6)
+        mean = torch.clamp(alpha / concentration, min=1e-4, max=1.0 - 1e-4)
+        max_concentration = mean * (1.0 - mean) / (normalized_floor ** 2) - 1.0
+        max_concentration = torch.clamp(max_concentration, min=1e-3)
+        capped_concentration = torch.minimum(concentration, max_concentration)
+        floored_alpha = torch.clamp(mean * capped_concentration, min=1e-3)
+        floored_beta = torch.clamp((1.0 - mean) * capped_concentration, min=1e-3)
+        return floored_alpha, floored_beta
 
     def _active_mask_tensor(self, action_ids: torch.Tensor) -> torch.Tensor:
         action_list = action_ids.detach().cpu().tolist()

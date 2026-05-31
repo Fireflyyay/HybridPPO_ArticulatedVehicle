@@ -27,7 +27,7 @@ if SRC_DIR not in sys.path:
     sys.path.append(SRC_DIR)
 
 from common.runtime_config import ExperimentConfig
-from common.types import ArticulatedState, MacroAction
+from common.types import ArticulatedState, MacroAction, wrap_to_pi
 from env.adapter import create_env_adapter
 from env.success import articulated_body_polygons
 from model.agent import HybridPPOAgent
@@ -60,6 +60,8 @@ class PathTrace:
     final_goal_distance: float
     scene: object
     last_info: Dict[str, object]
+    escape_targets: Tuple[Tuple[float, float], ...] = ()
+    reference_targets: Tuple[Tuple[float, float, float], ...] = ()
 
 
 def _parse_args() -> argparse.Namespace:
@@ -117,6 +119,12 @@ def _parse_args() -> argparse.Namespace:
         "--allow-config-mismatch",
         action="store_true",
         help="Allow fallback to the newest best.pt if no config-compatible checkpoint is found.",
+    )
+    parser.add_argument(
+        "--enable-phase-reference",
+        action="store_true",
+        default=False,
+        help="Enable phase-based reference target in the environment observation.",
     )
     return parser.parse_args()
 
@@ -283,6 +291,7 @@ def _simulate_path(
 
     states: List[ArticulatedState] = [env.get_articulated_state()]
     macro_steps: List[MacroStepTrace] = []
+    reference_targets: List[Tuple[float, float, float]] = []
     total_reward = 0.0
     terminated = False
     truncated = False
@@ -298,6 +307,7 @@ def _simulate_path(
                 parameters=np.asarray(selection.macro_action.parameters, dtype=np.float32).copy(),
             )
             context = env.make_primitive_context()
+            _capture_reference_target(reference_targets, task_env)
             rollout = executor.rollout(
                 start_state=env.get_articulated_state(),
                 primitive_id=action.primitive_id,
@@ -355,6 +365,7 @@ def _simulate_path(
         final_goal_distance=float(env.distance_to_goal()),
         scene=scene,
         last_info=dict(last_info),
+        reference_targets=tuple(reference_targets),
     )
 
 
@@ -440,6 +451,23 @@ def _intermediate_indices(count: int, sample_count: int) -> List[int]:
         return []
     candidates = np.linspace(1, count - 2, min(sample_count, count - 2), dtype=np.int64)
     return sorted(set(int(item) for item in candidates.tolist()))
+
+
+def _capture_reference_target(
+    reference_targets: List[Tuple[float, float, float]],
+    task_env,
+) -> None:
+    ref_pos = getattr(task_env, '_active_reference_goal_position', None)
+    ref_heading = getattr(task_env, '_active_reference_goal_heading', None)
+    if ref_pos is None or ref_heading is None:
+        return
+    current = (float(ref_pos[0]), float(ref_pos[1]), float(ref_heading))
+    if reference_targets:
+        prev = reference_targets[-1]
+        if (abs(current[0] - prev[0]) < 0.25 and abs(current[1] - prev[1]) < 0.25
+                and abs(wrap_to_pi(current[2] - prev[2])) < np.deg2rad(8.0)):
+            return
+    reference_targets.append(current)
 
 
 def _axis_limits(trace: PathTrace, margin: float = 8.0) -> Tuple[float, float, float, float]:
@@ -536,6 +564,35 @@ def _render_trace(
             label="Final pose",
         )
 
+    if trace.reference_targets:
+        ref_targets = np.asarray(trace.reference_targets, dtype=np.float64)
+        goal_pos = np.array([float(trace.scene.goal_state.x), float(trace.scene.goal_state.y)], dtype=np.float64)
+        arrow_length = 2.5
+        for idx in range(len(ref_targets)):
+            rx, ry, rhead = float(ref_targets[idx, 0]), float(ref_targets[idx, 1]), float(ref_targets[idx, 2])
+            is_goal = bool(np.hypot(rx - goal_pos[0], ry - goal_pos[1]) < 1.0)
+            color = "#2a9d8f" if is_goal else "#4d80d8"
+            label = "Goal-phase ref" if (is_goal and idx == 0) else ("Guidance-phase ref" if (not is_goal and idx == 0) else "")
+            ax.plot(rx, ry, "o", color=color, markersize=5, alpha=0.85, zorder=5, label=label or None)
+            dx = arrow_length * np.cos(rhead)
+            dy = arrow_length * np.sin(rhead)
+            ax.arrow(rx, ry, dx, dy, head_width=1.2, head_length=0.8, fc=color, ec=color, alpha=0.65, linewidth=1.0, zorder=5)
+        if len(ref_targets) >= 2:
+            ax.plot(ref_targets[:, 0], ref_targets[:, 1], color="#4d80d8", linewidth=0.8, linestyle=":", alpha=0.4)
+
+    if trace.escape_targets:
+        esc_positions = np.asarray(trace.escape_targets, dtype=np.float64)
+        ax.scatter(
+            esc_positions[:, 0], esc_positions[:, 1],
+            marker="D", s=48, facecolor="#ffb347", edgecolor="#b35e00",
+            linewidth=1.2, alpha=0.92, zorder=5, label="Escape sub-goal",
+        )
+        if len(esc_positions) >= 2:
+            ax.plot(
+                esc_positions[:, 0], esc_positions[:, 1],
+                color="#ffb347", linewidth=1.0, linestyle=":", alpha=0.55,
+            )
+
     view_xmin, view_xmax, view_ymin, view_ymax = _axis_limits(trace)
     ax.set_xlim(view_xmin, view_xmax)
     ax.set_ylim(view_ymin, view_ymax)
@@ -561,6 +618,10 @@ def _render_trace(
         Patch(facecolor="#c9c46a", edgecolor="#6b671d", alpha=0.45, label="Intermediate vehicle"),
         Patch(facecolor="#ffffff", edgecolor=route_color, label="Final pose"),
     ]
+    if trace.escape_targets:
+        handles.append(Line2D([0], [0], marker="D", color="w", markerfacecolor="#ffb347", markeredgecolor="#b35e00", markersize=8, label="Escape sub-goal"))
+    if trace.reference_targets:
+        handles.append(Line2D([0], [0], marker="o", color="#4d80d8", markersize=6, linestyle="None", label="Guidance-phase ref"))
     ax.legend(handles=handles, loc="upper right", fontsize=8, framealpha=0.92)
     figure.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -577,6 +638,9 @@ def _filename(prefix: str, trace: PathTrace, index: int) -> str:
 def main() -> None:
     args = _parse_args()
     config = ExperimentConfig()
+    if bool(args.enable_phase_reference):
+        from dataclasses import replace
+        config = replace(config, env=replace(config.env, phase_reference_enabled=True))
     device = _resolve_device(str(args.device))
     checkpoint_path = Path(args.checkpoint).expanduser() if args.checkpoint else _find_best_checkpoint(
         Path(args.runs_dir).expanduser(),

@@ -23,6 +23,7 @@ class EpisodeSummary:
     final_goal_distance: float
     last_info: Dict[str, object]
     action_diagnostics: Dict[str, object]
+    start_min_lidar_norm: float = 1.0
 
 
 def _mean_scalar(step_diagnostics, key: str) -> Optional[float]:
@@ -39,6 +40,8 @@ def _aggregate_action_diagnostics(step_diagnostics) -> Dict[str, object]:
     steps = int(len(step_diagnostics))
     primitive_counts: Dict[str, int] = {}
     semantic_counts: Dict[str, int] = {}
+    macro_termination_reason_counts: Dict[str, int] = {}
+    termination_by_action: Dict[str, int] = {}
     fallback_trigger_count = 0
     all_invalid_fallback_count = 0
     mask_degenerate_count = 0
@@ -48,6 +51,9 @@ def _aggregate_action_diagnostics(step_diagnostics) -> Dict[str, object]:
     selected_stop_check_count = 0
     selected_articulation_recover_count = 0
     selected_straight_adjust_count = 0
+    macro_articulation_limit_count = 0
+    macro_short_articulation_limit_count = 0
+    articulation_limit_taus = []
 
     for item in step_diagnostics:
         action_id = int(item.get("selected_action_id", -1))
@@ -55,6 +61,12 @@ def _aggregate_action_diagnostics(step_diagnostics) -> Dict[str, object]:
         primitive_key = f"{action_id}:{semantic}"
         primitive_counts[primitive_key] = int(primitive_counts.get(primitive_key, 0) + 1)
         semantic_counts[semantic] = int(semantic_counts.get(semantic, 0) + 1)
+        macro_reason = item.get("macro_termination_reason")
+        if macro_reason is not None:
+            macro_reason = str(macro_reason)
+            macro_termination_reason_counts[macro_reason] = int(macro_termination_reason_counts.get(macro_reason, 0) + 1)
+            cross_key = f"{action_id}:{macro_reason}"
+            termination_by_action[cross_key] = int(termination_by_action.get(cross_key, 0) + 1)
         fallback_trigger_count += int(bool(item.get("fallback_triggered", False)))
         all_invalid_fallback_count += int(bool(item.get("all_invalid_fallback", False)))
         mask_degenerate_count += int(int(item.get("selection_mask_positive_count", 0)) <= 0)
@@ -64,6 +76,10 @@ def _aggregate_action_diagnostics(step_diagnostics) -> Dict[str, object]:
         selected_stop_check_count += int(semantic == "stop-check")
         selected_articulation_recover_count += int(semantic == "articulation-recover")
         selected_straight_adjust_count += int(semantic == "straight-adjust")
+        macro_articulation_limit_count += int(bool(item.get("macro_articulation_limit_hit", False)))
+        macro_short_articulation_limit_count += int(bool(item.get("macro_short_articulation_limit_hit", False)))
+        if bool(item.get("macro_articulation_limit_hit", False)) and item.get("macro_tau") is not None:
+            articulation_limit_taus.append(float(item.get("macro_tau")))
 
     dominant_semantic = max(semantic_counts.items(), key=lambda pair: pair[1])[0]
     summary: Dict[str, object] = {
@@ -71,6 +87,8 @@ def _aggregate_action_diagnostics(step_diagnostics) -> Dict[str, object]:
         "dominant_semantic": str(dominant_semantic),
         "primitive_counts": primitive_counts,
         "semantic_counts": semantic_counts,
+        "macro_termination_reason_counts": macro_termination_reason_counts,
+        "termination_by_action": termination_by_action,
         "fallback_trigger_rate": float(fallback_trigger_count / float(steps)),
         "all_invalid_fallback_rate": float(all_invalid_fallback_count / float(steps)),
         "mask_degenerate_rate": float(mask_degenerate_count / float(steps)),
@@ -80,7 +98,11 @@ def _aggregate_action_diagnostics(step_diagnostics) -> Dict[str, object]:
         "selected_stop_check_rate": float(selected_stop_check_count / float(steps)),
         "selected_articulation_recover_rate": float(selected_articulation_recover_count / float(steps)),
         "selected_straight_adjust_rate": float(selected_straight_adjust_count / float(steps)),
+        "macro_articulation_limit_rate": float(macro_articulation_limit_count / float(steps)),
+        "macro_short_articulation_limit_rate": float(macro_short_articulation_limit_count / float(steps)),
     }
+    if articulation_limit_taus:
+        summary["macro_articulation_limit_tau_mean"] = float(sum(articulation_limit_taus) / float(len(articulation_limit_taus)))
     for metric_key in (
         "hard_valid_ratio",
         "soft_score_mean",
@@ -127,7 +149,8 @@ class MacroRolloutDriver:
         if reset_options is not None:
             options.update(dict(reset_options))
             options["level"] = str(level)
-        observation, _ = self.env.reset(seed=seed, options=options)
+        observation, reset_info = self.env.reset(seed=seed, options=options)
+        start_min_lidar_norm = float(reset_info.get("start_min_lidar_norm", 1.0))
         observation = np.asarray(observation, dtype=np.float32)
         total_reward = 0.0
         macro_steps = 0
@@ -139,8 +162,17 @@ class MacroRolloutDriver:
         action_diagnostics = []
 
         while macro_steps < self.max_macro_steps and not (terminated or truncated):
-            context = self.env.make_primitive_context()
+            if hasattr(self.env, "clear_reference_override"):
+                self.env.clear_reference_override()
             teacher_advice = None if self.soft_teacher is None else self.soft_teacher.advise(observation, previous_action_id=previous_action_id)
+            if (
+                teacher_advice is not None
+                and hasattr(self.env, "set_reference_override")
+                and teacher_advice.reference_goal_position is not None
+                and teacher_advice.reference_goal_heading is not None
+            ):
+                self.env.set_reference_override(teacher_advice.reference_goal_position, float(teacher_advice.reference_goal_heading))
+            context = self.env.make_primitive_context()
             selection = self.agent.act(
                 observation,
                 deterministic=deterministic,
@@ -148,8 +180,7 @@ class MacroRolloutDriver:
                 teacher_weight=0.0 if teacher_advice is None else float(teacher_advice.weight),
                 return_diagnostics=True,
             )
-            if selection.diagnostics is not None:
-                action_diagnostics.append(dict(selection.diagnostics))
+            step_diagnostics = None if selection.diagnostics is None else dict(selection.diagnostics)
             next_observation, reward, terminated, truncated, step_info = self.macro_env.step(
                 selection.macro_action,
                 start_state=self.env.get_articulated_state(),
@@ -170,6 +201,18 @@ class MacroRolloutDriver:
                 step_info["done_reason"] = "macro_budget"
                 step_info["truncated"] = True
                 step_info["done"] = True
+
+            if step_diagnostics is not None:
+                macro_termination_reason = str(step_info.get("macro_termination_reason", "unknown"))
+                step_diagnostics.update(
+                    {
+                        "macro_termination_reason": macro_termination_reason,
+                        "macro_tau": int(tau),
+                        "macro_articulation_limit_hit": bool(macro_termination_reason == "articulation_limit"),
+                        "macro_short_articulation_limit_hit": bool(macro_termination_reason == "articulation_limit" and int(tau) <= 2),
+                    }
+                )
+                action_diagnostics.append(step_diagnostics)
 
             if store_transition:
                 self.agent.store_transition(
@@ -213,4 +256,5 @@ class MacroRolloutDriver:
             final_goal_distance=float(self.env.distance_to_goal()),
             last_info=dict(last_info),
             action_diagnostics=_aggregate_action_diagnostics(action_diagnostics),
+            start_min_lidar_norm=float(start_min_lidar_norm),
         )

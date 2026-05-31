@@ -40,6 +40,12 @@ class UnifiedArticulatedEnvProtocol(Protocol):
     def make_primitive_context(self) -> PrimitiveExecutionContext:
         ...
 
+    def set_reference_override(self, goal_position, goal_heading: float) -> None:
+        ...
+
+    def clear_reference_override(self) -> None:
+        ...
+
 
 class KinematicTaskAdapter:
     def __init__(self, env: KinematicTaskEnv) -> None:
@@ -75,6 +81,12 @@ class KinematicTaskAdapter:
 
     def make_primitive_context(self) -> PrimitiveExecutionContext:
         return self.env.make_primitive_context()
+
+    def set_reference_override(self, goal_position, goal_heading: float) -> None:
+        self.env.set_reference_override(goal_position=goal_position, goal_heading=goal_heading)
+
+    def clear_reference_override(self) -> None:
+        self.env.clear_reference_override()
 
 
 def create_env_adapter(
