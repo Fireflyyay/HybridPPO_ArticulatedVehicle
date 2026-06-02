@@ -31,3 +31,6 @@ docs/*
 runs/
 .DS_Store
 /img/*
+/output/*
+/results/*
+

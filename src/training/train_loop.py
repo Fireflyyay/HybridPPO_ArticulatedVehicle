@@ -8,7 +8,7 @@ from env.macro_wrapper import ParameterizedMacroActionWrapper
 from model.agent import HybridPPOAgent
 from primitives import ParameterizedPrimitiveExecutor, build_default_primitive_library, load_proxy_safety_sidecar
 from training.checkpoint import CheckpointManager
-from training.curriculum import SuccessBandCurriculum
+from training.curriculum import DifficultyAdaptiveSampler, SuccessBandCurriculum
 from training.evaluator import PolicyEvaluator
 from training.logger import TensorBoardLogger
 from training.rollout import MacroRolloutDriver
@@ -42,6 +42,9 @@ class ExperimentTrainer:
         self.device = _resolve_device(config.device)
         self.logger = TensorBoardLogger(config.logging)
         self.curriculum = SuccessBandCurriculum(config.schedule, seed=int(config.seed))
+        self.difficulty_sampler: Optional[DifficultyAdaptiveSampler] = None
+        if config.schedule.adaptive_sampling_enabled:
+            self.difficulty_sampler = DifficultyAdaptiveSampler(config.schedule, seed=int(config.seed))
         proxy_sidecar = None
         proxy_sidecar_path = str(config.proxy_safety.sidecar_path).strip()
         if proxy_sidecar_path:
@@ -93,7 +96,10 @@ class ExperimentTrainer:
             metadata = self.checkpoints.load(resume_path, self.agent, map_location=str(self.device))
             self.start_episode = int(metadata["episode_idx"])
             self.update_idx = int(metadata["update_idx"])
-            self.curriculum.load_state_dict(dict(metadata.get("extra", {})).get("curriculum"))
+            extra = dict(metadata.get("extra", {}))
+            self.curriculum.load_state_dict(extra.get("curriculum"))
+            if self.difficulty_sampler is not None:
+                self.difficulty_sampler.load_state_dict(extra.get("difficulty_sampler"))
 
     def _level_metric(self, level: str) -> float:
         if str(level) == str(self.curriculum.warmup_level):
@@ -106,6 +112,8 @@ class ExperimentTrainer:
         extra: Dict[str, object] = {
             "curriculum": self.curriculum.state_dict(),
         }
+        if self.difficulty_sampler is not None:
+            extra["difficulty_sampler"] = self.difficulty_sampler.state_dict()
         if evaluation is not None:
             extra["evaluation"] = evaluation
         return extra
@@ -131,6 +139,9 @@ class ExperimentTrainer:
             for episode_idx in range(int(self.start_episode), int(self.config.schedule.total_episodes)):
                 reset_options = self.curriculum.reset_options()
                 level = str(reset_options["level"])
+                if self.difficulty_sampler is not None:
+                    bucket = self.difficulty_sampler.choose_bucket(level)
+                    reset_options["difficulty_bucket"] = bucket
                 summary = self.rollout_driver.collect_episode(
                     level=level,
                     seed=int(self.config.seed + episode_idx),
@@ -140,23 +151,28 @@ class ExperimentTrainer:
                 )
                 pending_episodes += 1
                 self.curriculum.record_episode(level, summary.success)
-                self.logger.log_training_episode(
-                    episode_idx + 1,
-                    {
-                        "episode": episode_idx + 1,
-                        "level": self._level_metric(level),
-                        "total_reward": summary.total_reward,
-                        "macro_steps": summary.macro_steps,
-                        "low_level_steps": summary.low_level_steps,
-                        "success": float(summary.success),
-                        "collision": float(summary.collision),
-                        "terminated": float(summary.terminated),
-                        "truncated": float(summary.truncated),
-                        "final_goal_distance": summary.final_goal_distance,
-                        "action_diagnostics": summary.action_diagnostics,
-                        "curriculum": self.curriculum.metrics(),
-                    },
-                )
+                if self.difficulty_sampler is not None:
+                    scene_meta = dict(summary.last_info.get("scene_metadata", {}))
+                    heading_diff = float(scene_meta.get("heading_diff_deg", 0.0))
+                    actual_bucket = DifficultyAdaptiveSampler.compute_bucket(heading_diff)
+                    self.difficulty_sampler.record_episode(level, actual_bucket, summary.success)
+                log_payload = {
+                    "episode": episode_idx + 1,
+                    "level": self._level_metric(level),
+                    "total_reward": summary.total_reward,
+                    "macro_steps": summary.macro_steps,
+                    "low_level_steps": summary.low_level_steps,
+                    "success": float(summary.success),
+                    "collision": float(summary.collision),
+                    "terminated": float(summary.terminated),
+                    "truncated": float(summary.truncated),
+                    "final_goal_distance": summary.final_goal_distance,
+                    "action_diagnostics": summary.action_diagnostics,
+                    "curriculum": self.curriculum.metrics(),
+                }
+                if self.difficulty_sampler is not None:
+                    log_payload["difficulty_sampler"] = self.difficulty_sampler.metrics()
+                self.logger.log_training_episode(episode_idx + 1, log_payload)
 
                 if pending_episodes >= int(self.config.schedule.episodes_per_update) and len(self.agent.buffer) > 0:
                     update_metrics = self.agent.update()

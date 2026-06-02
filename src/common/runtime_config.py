@@ -25,16 +25,16 @@ class ObservationConfig:
 class RewardConfig:
     progress_weight: float = 8.0
     distance_weight: float = 2.5
-    heading_weight: float = 0.8
+    heading_weight: float = 2.0
     overlap_weight: float = 14.0
     step_penalty: float = -0.05
     success_reward: float = 35.0
     collision_penalty: float = -25.0
     out_of_bounds_penalty: float = -25.0
-    timeout_penalty: float = -10.0
+    timeout_penalty: float = -25.0
     topology_sigma: float = 8.0
     near_goal_radius: float = 10.0
-    reverse_penalty_coef: float = 0.2
+    reverse_penalty_coef: float = -0.2
 
 
 @dataclass(frozen=True)
@@ -133,7 +133,7 @@ class HybridPPOHyperConfig:
     mini_batch_size: int = 1024
     update_epochs: int = 10
     std_floor: float = 0.08
-    soft_mask_enabled: bool = True
+    soft_mask_enabled: bool = False
     soft_mask_gamma: float = 1.0
     soft_mask_eps: float = 1e-4
     soft_mask_logit_scale: float = 0.8
@@ -178,7 +178,7 @@ class HybridPPOHyperConfig:
 
 @dataclass(frozen=True)
 class ProxySafetyConfig:
-    sidecar_path: str = "/home/cyberbus/Public/HybridPPO_ArticulatedVehicle/data/proxy_safety_sidecar.npz"
+    sidecar_path: str = "data/proxy_safety_sidecar.npz"
 
 
 @dataclass(frozen=True)
@@ -195,6 +195,10 @@ class TrainingScheduleConfig:
     target_success_band: Tuple[float, float] = (0.25, 0.60)
     target_focus_prob: float = 0.9
     warmup_bridge_prob: float = 0.5
+    adaptive_sampling_enabled: bool = True
+    adaptive_sampling_min_uniform: int = 200
+    adaptive_sampling_uniform_prob: float = 0.5
+    adaptive_sampling_target_success: Dict[str, float] = field(default_factory=lambda: {"Warmup": 0.7, "Normal": 0.5})
 
     def warmup_progress_for_index(self, warmup_episode_idx: int) -> float:
         index = max(0, int(warmup_episode_idx))

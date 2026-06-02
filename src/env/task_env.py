@@ -50,12 +50,14 @@ class KinematicTaskEnv:
         self._goal_state: Optional[ArticulatedState] = None
         self._obstacle_union = None
         self._world_box = None
-        self._beam_angle_offsets = np.linspace(
-            -np.pi,
-            np.pi,
-            int(self.observation_config.lidar_num_beams),
-            endpoint=False,
-            dtype=np.float64,
+        total_beams = int(self.observation_config.lidar_num_beams)
+        self._front_beams = total_beams // 2
+        self._rear_beams = total_beams - self._front_beams
+        self._front_beam_angles = np.linspace(
+            -np.pi, np.pi, self._front_beams, endpoint=False, dtype=np.float64,
+        )
+        self._rear_beam_angles = np.linspace(
+            -np.pi, np.pi, self._rear_beams, endpoint=False, dtype=np.float64,
         )
         self._obstacle_segment_x1 = np.empty((0,), dtype=np.float64)
         self._obstacle_segment_y1 = np.empty((0,), dtype=np.float64)
@@ -76,7 +78,18 @@ class KinematicTaskEnv:
         if seed is not None:
             self._rng = np.random.default_rng(int(seed))
         level = str((options or {}).get("level", self.env_config.default_level))
-        self._scene = self.scene_factory.generate(level, self._rng, options=options)
+        scene_options = dict(options or {})
+        difficulty_bucket = scene_options.pop("difficulty_bucket", None)
+        if difficulty_bucket is not None:
+            bucket_heading_ranges = {
+                "forward-approach": (0.0, 45.0),
+                "side-approach": (45.0, 135.0),
+                "reverse-approach": (135.0, 180.0),
+            }
+            heading_range = bucket_heading_ranges.get(str(difficulty_bucket))
+            if heading_range is not None:
+                scene_options["heading_diff_range_deg"] = heading_range
+        self._scene = self.scene_factory.generate(level, self._rng, options=scene_options)
         self._state = self._scene.start_state
         self._goal_state = self._scene.goal_state
         self._obstacle_union = None if len(self._scene.obstacles) == 0 else unary_union(list(self._scene.obstacles))
@@ -432,17 +445,45 @@ class KinematicTaskEnv:
             lidar_range=float(self.observation_config.lidar_max_range),
         )
 
+    def _front_lidar_origin(self, state: ArticulatedState):
+        return float(state.x), float(state.y)
+
+    def _rear_lidar_origin(self, state: ArticulatedState):
+        hitch_offset = float(self.vehicle_config.hitch_offset)
+        rear_length = float(self.vehicle_config.rear_length)
+        cos_front = np.cos(float(state.front_heading))
+        sin_front = np.sin(float(state.front_heading))
+        cos_rear = np.cos(float(state.rear_heading))
+        sin_rear = np.sin(float(state.rear_heading))
+        hinge_x = float(state.x) - hitch_offset * cos_front
+        hinge_y = float(state.y) - hitch_offset * sin_front
+        rear_center_x = hinge_x - 0.5 * rear_length * cos_rear
+        rear_center_y = hinge_y - 0.5 * rear_length * sin_rear
+        return rear_center_x, rear_center_y
+
     def _lidar_observation(self, state: ArticulatedState) -> np.ndarray:
-        beam_count = int(self.observation_config.lidar_num_beams)
         max_range = float(self.observation_config.lidar_max_range)
-        headings = float(state.front_heading) + self._beam_angle_offsets
-        ray_dx = np.cos(headings)
-        ray_dy = np.sin(headings)
-        bound_distance = self._distance_to_scene_bounds(float(state.x), float(state.y), ray_dx, ray_dy, max_range)
-        obstacle_distance = self._distance_to_obstacle_segments(float(state.x), float(state.y), ray_dx, ray_dy, max_range)
-        values = np.minimum(bound_distance, obstacle_distance)
-        if values.shape[0] != beam_count:
-            raise RuntimeError("lidar distance computation returned unexpected beam count")
+
+        front_headings = float(state.front_heading) + self._front_beam_angles
+        front_dx = np.cos(front_headings)
+        front_dy = np.sin(front_headings)
+        front_x, front_y = self._front_lidar_origin(state)
+        front_bound = self._distance_to_scene_bounds(front_x, front_y, front_dx, front_dy, max_range)
+        front_obs = self._distance_to_obstacle_segments(front_x, front_y, front_dx, front_dy, max_range)
+        front_values = np.minimum(front_bound, front_obs)
+
+        rear_headings = float(state.rear_heading) + self._rear_beam_angles
+        rear_dx = np.cos(rear_headings)
+        rear_dy = np.sin(rear_headings)
+        rear_x, rear_y = self._rear_lidar_origin(state)
+        rear_bound = self._distance_to_scene_bounds(rear_x, rear_y, rear_dx, rear_dy, max_range)
+        rear_obs = self._distance_to_obstacle_segments(rear_x, rear_y, rear_dx, rear_dy, max_range)
+        rear_values = np.minimum(rear_bound, rear_obs)
+
+        values = np.concatenate([front_values, rear_values])
+        total_beams = self._front_beams + self._rear_beams
+        if values.shape[0] != total_beams:
+            raise RuntimeError("dual lidar distance computation returned unexpected beam count")
         return (values / max(max_range, 1e-6)).astype(np.float32)
 
     def _cache_obstacle_segments(self) -> None:

@@ -100,12 +100,15 @@ class BaselineInspiredSceneFactory:
             raise KeyError(f"unknown level: {level_name}")
         config = self.presets[level_name]
         if level_name == "Debug":
-            return self._generate_debug(level_name, config, rng)
+            return self._generate_debug(level_name, config, rng, options=options)
         if level_name == "Warmup":
             return self._generate_warmup(level_name, config, rng, options=options)
-        return self._generate_block_mixing(level_name, config, rng)
+        return self._generate_block_mixing(level_name, config, rng, options=options)
 
-    def _generate_debug(self, level: str, config: SceneLevelConfig, rng: np.random.Generator) -> SceneSpec:
+    def _generate_debug(
+        self, level: str, config: SceneLevelConfig, rng: np.random.Generator,
+        options: Optional[Mapping[str, object]] = None,
+    ) -> SceneSpec:
         world_min = float(config.world_min)
         world_max = float(config.world_max)
         margin = float(config.boundary_margin)
@@ -122,13 +125,14 @@ class BaselineInspiredSceneFactory:
             jitter = float(config.heading_jitter_rad)
             start_heading = path_heading + float(rng.uniform(-jitter, jitter))
             goal_heading = path_heading + float(rng.uniform(-jitter, jitter))
+            heading_diff_deg = abs(float(np.rad2deg(wrap_to_pi(goal_heading - start_heading))))
             return SceneSpec(
                 level=level,
                 world_bounds=(world_min, world_max, world_min, world_max),
                 obstacles=tuple(),
                 start_state=ArticulatedState(start_x, start_y, start_heading, start_heading),
                 goal_state=ArticulatedState(goal_x, goal_y, goal_heading, goal_heading),
-                metadata={"scene_type": "debug_blank"},
+                metadata={"scene_type": "debug_blank", "heading_diff_deg": float(heading_diff_deg)},
             )
         raise RuntimeError("failed to sample debug scene")
 
@@ -188,6 +192,8 @@ class BaselineInspiredSceneFactory:
         start_state = ArticulatedState(x=sx, y=sy, front_heading=start_heading, rear_heading=start_heading)
         goal_state = ArticulatedState(x=gx, y=gy, front_heading=float(bay_heading), rear_heading=float(bay_heading))
 
+        heading_diff_deg = abs(float(np.rad2deg(wrap_to_pi(float(bay_heading) - start_heading))))
+
         return SceneSpec(
             level=level,
             world_bounds=world_bounds,
@@ -202,6 +208,7 @@ class BaselineInspiredSceneFactory:
                 "warmup_progress": _warmup_progress(options),
                 "turn_count": int(turn_count),
                 "centerline_points": len(centerline),
+                "heading_diff_deg": float(heading_diff_deg),
             },
         )
 
@@ -341,7 +348,10 @@ class BaselineInspiredSceneFactory:
         bay_heading = float(np.arctan2(pdy, pdx))
         return bay_polygon, bay_heading
 
-    def _generate_block_mixing(self, level: str, config: SceneLevelConfig, rng: np.random.Generator) -> SceneSpec:
+    def _generate_block_mixing(
+        self, level: str, config: SceneLevelConfig, rng: np.random.Generator,
+        options: Optional[Mapping[str, object]] = None,
+    ) -> SceneSpec:
         world_min = float(config.world_min)
         world_max = float(config.world_max)
         margin = float(config.boundary_margin)
@@ -405,11 +415,14 @@ class BaselineInspiredSceneFactory:
             if len(valid_candidates) < 2:
                 continue
             try:
+                heading_diff_range_deg = config.pair_heading_diff_range_deg
+                if options is not None and "heading_diff_range_deg" in options:
+                    heading_diff_range_deg = tuple(options["heading_diff_range_deg"])
                 start, goal = self._sample_pose_pair(
                     rng,
                     valid_candidates,
                     config.pair_distance_range,
-                    config.pair_heading_diff_range_deg,
+                    heading_diff_range_deg,
                 )
             except RuntimeError:
                 continue
@@ -425,6 +438,7 @@ class BaselineInspiredSceneFactory:
                     "free_shape_count": len(free_shapes),
                     "valid_candidate_count": len(valid_candidates),
                     "aligned_to": "ppo_articulated_vehicle",
+                    "heading_diff_deg": abs(float(np.rad2deg(wrap_to_pi(goal.heading - start.heading)))),
                 },
             )
         raise RuntimeError("failed to sample block mixing scene")

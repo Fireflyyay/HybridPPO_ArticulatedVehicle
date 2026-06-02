@@ -8,6 +8,7 @@ from itertools import product
 from typing import Dict, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
+from shapely.geometry import Point as ShapelyPoint
 
 
 def primitive_library_signature(spec_payload: Sequence[Mapping[str, object]], parameter_names: Sequence[str], bounds: Mapping[str, Tuple[float, float]]) -> str:
@@ -171,6 +172,8 @@ def save_proxy_safety_sidecar(path: str, sidecar: ProxySafetySidecar) -> None:
 
 
 def load_proxy_safety_sidecar(path: str) -> ProxySafetySidecar:
+    import warnings
+
     data = np.load(path, allow_pickle=True)
     metadata = {}
     if "metadata" in data:
@@ -184,6 +187,21 @@ def load_proxy_safety_sidecar(path: str) -> ProxySafetySidecar:
             signature = str(data["library_signature"].item())
         except Exception:
             signature = ""
+    model_version = str(metadata.get("lidar_model_version", ""))
+    if not model_version:
+        warnings.warn(
+            "proxy safety sidecar does not contain lidar_model_version in metadata. "
+            "This sidecar was built for the old single-origin front-only LiDAR layout "
+            "and is NOT compatible with the current dual-body (front+rear) LiDAR. "
+            "Please regenerate the sidecar using build_proxy_safety_sidecar().",
+            UserWarning,
+        )
+    elif model_version != "dual_body_54_54_v1":
+        warnings.warn(
+            f"proxy safety sidecar has unexpected lidar_model_version={model_version}. "
+            f"Expected 'dual_body_54_54_v1'. Compatibility not guaranteed.",
+            UserWarning,
+        )
     return ProxySafetySidecar(
         required_clearance=np.asarray(data["required_clearance"], dtype=np.float32),
         articulation_bin_centers=np.asarray(data["articulation_bin_centers"], dtype=np.float32),
@@ -264,6 +282,8 @@ def build_proxy_safety_sidecar(
     proxy_resolution: int = 2,
     max_proxies_per_action: Optional[int] = None,
     semantic_proxy_resolution: Optional[Mapping[str, int]] = None,
+    front_beams: Optional[int] = None,
+    rear_beams: Optional[int] = None,
 ) -> ProxySafetySidecar:
     from shapely.geometry import LineString, Point
     from shapely.ops import unary_union
@@ -273,6 +293,8 @@ def build_proxy_safety_sidecar(
     from primitives.library import ParameterizedPrimitiveExecutor, SemanticPrimitive
 
     lidar_num = max(1, int(lidar_num))
+    front_beams = int(front_beams) if front_beams is not None else (lidar_num // 2)
+    rear_beams = int(rear_beams) if rear_beams is not None else (lidar_num - front_beams)
     lidar_range = float(lidar_range)
     articulation_bin_count = max(1, int(articulation_bin_count))
     articulation_limit = float(vehicle_config.articulation_limit_rad)
@@ -287,11 +309,18 @@ def build_proxy_safety_sidecar(
     required_clearance = np.zeros((articulation_bin_count, library.action_dim, parameter_centers.shape[1], max_steps, lidar_num), dtype=np.float32)
     nominal_horizons = np.ones((library.action_dim, parameter_centers.shape[1]), dtype=np.int64)
     executor = ParameterizedPrimitiveExecutor(library, vehicle_config=vehicle_config, executor_config=executor_config)
-    ray_angles = np.linspace(-np.pi, np.pi, lidar_num, endpoint=False, dtype=np.float32)
+    front_ray_angles = np.linspace(-np.pi, np.pi, front_beams, endpoint=False, dtype=np.float32)
+    rear_ray_angles = np.linspace(-np.pi, np.pi, rear_beams, endpoint=False, dtype=np.float32)
     ray_length = max(lidar_range, vehicle_config.front_length + vehicle_config.rear_length + 10.0)
-    origin = Point(0.0, 0.0)
+    front_origin = Point(0.0, 0.0)
 
     for art_index, articulation_angle in enumerate(articulation_bin_centers):
+        rear_cos = np.cos(float(articulation_angle))
+        rear_sin = np.sin(float(articulation_angle))
+        rear_origin = Point(
+            float(-vehicle_config.hitch_offset) - 0.5 * float(vehicle_config.rear_length) * rear_cos,
+            0.5 * float(vehicle_config.rear_length) * rear_sin,
+        )
         for action_id in range(library.action_dim):
             for proxy_id in range(parameter_centers.shape[1]):
                 if not bool(proxy_valid_mask[action_id, proxy_id]):
@@ -312,11 +341,13 @@ def build_proxy_safety_sidecar(
                     swept_volume = unary_union(prefix_polygons)
                     if step_index == 0:
                         continue
-                    last_extent = _ray_required_clearance(
+                    last_extent = _ray_required_clearance_dual(
                         swept_volume=swept_volume,
-                        ray_angles=ray_angles,
+                        front_ray_angles=front_ray_angles,
+                        front_origin=front_origin,
+                        rear_ray_angles=rear_ray_angles,
+                        rear_origin=rear_origin,
                         ray_length=ray_length,
-                        origin=origin,
                         line_factory=LineString,
                     )
                     required_clearance[art_index, action_id, proxy_id, step_index - 1, :] = last_extent
@@ -331,6 +362,11 @@ def build_proxy_safety_sidecar(
         "lidar_num": int(lidar_num),
         "lidar_range": float(lidar_range),
         "index_kind": "full_body_swept_volume_required_clearance",
+        "lidar_model_version": "dual_body_54_54_v1",
+        "front_beams": int(front_beams),
+        "rear_beams": int(rear_beams),
+        "front_frame": "front_heading",
+        "rear_frame": "rear_heading",
     }
     return ProxySafetySidecar(
         required_clearance=required_clearance,
@@ -398,20 +434,62 @@ def _proxy_termination_reason(executor, spec_semantic, state, travelled_distance
 
 
 def _ray_required_clearance(swept_volume, ray_angles: np.ndarray, ray_length: float, origin, line_factory) -> np.ndarray:
-    out = np.zeros((ray_angles.shape[0],), dtype=np.float32)
     if swept_volume is None or swept_volume.is_empty:
-        return out
+        return np.zeros((ray_angles.shape[0],), dtype=np.float32)
+    out = np.zeros((ray_angles.shape[0],), dtype=np.float32)
     for ray_index, angle in enumerate(ray_angles):
         ray = line_factory(
             [
-                (0.0, 0.0),
-                (float(ray_length) * np.cos(float(angle)), float(ray_length) * np.sin(float(angle))),
+                (float(origin.x), float(origin.y)),
+                (float(origin.x) + float(ray_length) * np.cos(float(angle)),
+                 float(origin.y) + float(ray_length) * np.sin(float(angle))),
             ]
         )
         intersection = ray.intersection(swept_volume)
         distances = _intersection_distances(origin, intersection)
         if distances:
             out[ray_index] = float(max(distances))
+    return out
+
+
+def _ray_required_clearance_dual(
+    swept_volume,
+    front_ray_angles: np.ndarray,
+    front_origin,
+    rear_ray_angles: np.ndarray,
+    rear_origin,
+    ray_length: float,
+    line_factory,
+) -> np.ndarray:
+    n_front = int(front_ray_angles.shape[0])
+    n_rear = int(rear_ray_angles.shape[0])
+    out = np.zeros((n_front + n_rear,), dtype=np.float32)
+    if swept_volume is None or swept_volume.is_empty:
+        return out
+    for i, angle in enumerate(front_ray_angles):
+        ray = line_factory(
+            [
+                (float(front_origin.x), float(front_origin.y)),
+                (float(front_origin.x) + float(ray_length) * np.cos(float(angle)),
+                 float(front_origin.y) + float(ray_length) * np.sin(float(angle))),
+            ]
+        )
+        intersection = ray.intersection(swept_volume)
+        distances = _intersection_distances(front_origin, intersection)
+        if distances:
+            out[i] = float(max(distances))
+    for i, angle in enumerate(rear_ray_angles):
+        ray = line_factory(
+            [
+                (float(rear_origin.x), float(rear_origin.y)),
+                (float(rear_origin.x) + float(ray_length) * np.cos(float(angle)),
+                 float(rear_origin.y) + float(ray_length) * np.sin(float(angle))),
+            ]
+        )
+        intersection = ray.intersection(swept_volume)
+        distances = _intersection_distances(rear_origin, intersection)
+        if distances:
+            out[n_front + i] = float(max(distances))
     return out
 
 
@@ -422,9 +500,9 @@ def _intersection_distances(origin, geometry) -> Sequence[float]:
     if geom_type == "Point":
         return [float(origin.distance(geometry))]
     if geom_type == "LineString":
-        return [float(np.hypot(x, y)) for x, y in list(geometry.coords)]
+        return [float(origin.distance(ShapelyPoint(x, y))) for x, y in list(geometry.coords)]
     if geom_type == "Polygon":
-        return [float(np.hypot(x, y)) for x, y in list(geometry.exterior.coords)]
+        return [float(origin.distance(ShapelyPoint(x, y))) for x, y in list(geometry.exterior.coords)]
     if hasattr(geometry, "geoms"):
         distances = []
         for child in geometry.geoms:
